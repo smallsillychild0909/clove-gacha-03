@@ -1135,7 +1135,12 @@ def my_shippings(user: dict = Depends(require_member)):
         if dt is None:
             dt_str = ""
         elif hasattr(dt, "strftime"):
-            dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+            # Postgres datetime 是 UTC，轉成 Asia/Taipei (+8)
+            from datetime import timezone, timedelta
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_local = dt.astimezone(timezone(timedelta(hours=8)))
+            dt_str = dt_local.strftime("%Y-%m-%d %H:%M:%S")
         else:
             dt_str = str(dt)
         d["created_at"] = dt_str
@@ -1212,7 +1217,11 @@ def admin_shippings(start: Optional[str] = None, end: Optional[str] = None, admi
         if dt is None:
             dt_str = ""
         elif hasattr(dt, "strftime"):
-            dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+            from datetime import timezone, timedelta
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_local = dt.astimezone(timezone(timedelta(hours=8)))
+            dt_str = dt_local.strftime("%Y-%m-%d %H:%M:%S")
         else:
             dt_str = str(dt)
         d["created_at"] = dt_str
