@@ -24,7 +24,7 @@ export default function Navbar() {
                 {user.username} · <span className="text-yellow-300 font-semibold">{user.points?.toLocaleString()} pt</span>
               </span>
               <Link to="/recharge" className="hover:text-pink-400 transition">儲值</Link>
-              <Link to="/records" className="hover:text-pink-400 transition">紀錄</Link>
+              <Link to="/records" className="hover:text-pink-400 transition">功能</Link>
               {user.role === "admin" && (
                 <Link to="/admin" className="text-purple-400 hover:text-purple-300 transition">管理控台</Link>
               )}
