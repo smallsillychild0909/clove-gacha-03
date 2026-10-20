@@ -1,6 +1,27 @@
 import { useEffect, useState, useMemo } from "react";
 import api from "../../api/client";
 
+// 將時間字串轉成 UTC+8 顯示（YYYY-MM-DD HH:mm:ss）
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return "";
+  let s = String(dateStr).trim();
+  // 若沒有時區資訊，視為 UTC
+  if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    s = s.includes("T") ? s + "Z" : s.replace(" ", "T") + "Z";
+  }
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return String(dateStr);
+  const utc8 = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${utc8.getUTCFullYear()}-${pad(utc8.getUTCMonth() + 1)}-${pad(utc8.getUTCDate())} ${pad(utc8.getUTCHours())}:${pad(utc8.getUTCMinutes())}:${pad(utc8.getUTCSeconds())}`;
+};
+
+// 取得 UTC+8 的日期部分（YYYY-MM-DD），供篩選使用
+const getDatePartUTC8 = (dateStr) => {
+  const formatted = formatDateTime(dateStr);
+  return formatted ? formatted.slice(0, 10) : "";
+};
+
 export default function AdminRecords() {
   const [tab, setTab] = useState("tx");
   const [txs, setTxs] = useState([]);
@@ -17,7 +38,8 @@ export default function AdminRecords() {
 
   const inRange = (dateStr) => {
     if (!dateStr) return false;
-    const d = String(dateStr).slice(0, 10);
+    const d = getDatePartUTC8(dateStr);
+    if (!d) return false;
     if (startDate && d < startDate) return false;
     if (endDate && d > endDate) return false;
     return true;
@@ -49,7 +71,7 @@ export default function AdminRecords() {
         <table>
           <thead>
             <tr>
-              <th>時間</th><th>會員</th><th>類型</th><th>金額</th><th>餘額</th><th>備註</th>
+              <th>時間 (UTC+8)</th><th>會員</th><th>類型</th><th>金額</th><th>餘額</th><th>備註</th>
             </tr>
           </thead>
           <tbody>
@@ -57,7 +79,7 @@ export default function AdminRecords() {
               .map(
                 (t) => `
               <tr>
-                <td>${t.created_at || ""}</td>
+                <td>${formatDateTime(t.created_at)}</td>
                 <td>${t.username || ""}</td>
                 <td>${t.type || ""}</td>
                 <td>${t.amount > 0 ? "+" : ""}${t.amount}</td>
@@ -73,7 +95,7 @@ export default function AdminRecords() {
         <table>
           <thead>
             <tr>
-              <th>時間</th><th>會員</th><th>卡池</th><th>類型</th><th>消耗點數</th><th>抽中卡片</th>
+              <th>時間 (UTC+8)</th><th>會員</th><th>卡池</th><th>類型</th><th>消耗點數</th><th>抽中卡片</th>
             </tr>
           </thead>
           <tbody>
@@ -82,7 +104,7 @@ export default function AdminRecords() {
                 const cards = (r.results || []).map((c) => c.name).join("、");
                 return `
               <tr>
-                <td>${r.created_at || ""}</td>
+                <td>${formatDateTime(r.created_at)}</td>
                 <td>${r.username || ""}</td>
                 <td>${r.pool_name || ""}</td>
                 <td>${r.draw_type === "single" ? "單抽" : "十連"}</td>
@@ -113,7 +135,7 @@ export default function AdminRecords() {
       </head>
       <body>
         <h1>${title}</h1>
-        <div class="meta">${rangeText}　|　共 ${data.length} 筆　|　產生時間：${new Date().toLocaleString("zh-TW")}</div>
+        <div class="meta">${rangeText}　|　共 ${data.length} 筆　|　產生時間：${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}</div>
         ${data.length ? tableHtml : '<p class="empty">此日期範圍內無資料</p>'}
       </body>
       </html>`;
@@ -195,7 +217,7 @@ export default function AdminRecords() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-400 border-b border-gray-800">
-                <th className="py-2 pr-3">時間</th>
+                <th className="py-2 pr-3">時間 (UTC+8)</th>
                 <th className="py-2 pr-3">會員</th>
                 <th className="py-2 pr-3">類型</th>
                 <th className="py-2 pr-3">金額</th>
@@ -206,7 +228,7 @@ export default function AdminRecords() {
             <tbody>
               {filteredTxs.map((t) => (
                 <tr key={t.id} className="border-b border-gray-900">
-                  <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{t.created_at}</td>
+                  <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{formatDateTime(t.created_at)}</td>
                   <td className="py-2 pr-3">{t.username}</td>
                   <td className="py-2 pr-3">{t.type}</td>
                   <td className={`py-2 pr-3 font-medium ${t.amount > 0 ? "text-green-400" : "text-red-400"}`}>
@@ -227,7 +249,7 @@ export default function AdminRecords() {
           {filteredDraws.map((r) => (
             <div key={r.id} className="bg-dark-800/60 rounded-xl p-4 border border-purple-900/20 text-sm">
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-gray-400 mb-2">
-                <span>{r.created_at}</span>
+                <span>{formatDateTime(r.created_at)}</span>
                 <span className="text-white">{r.username}</span>
                 <span>{r.pool_name}</span>
                 <span>{r.draw_type === "single" ? "單抽" : "十連"}</span>
