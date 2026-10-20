@@ -56,6 +56,11 @@ class _CompatCursor:
                     sql = sql.rstrip().rstrip(";") + " ON CONFLICT (user_id, card_key) DO NOTHING"
                 else:
                     sql = sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+            # SQLite 日期函式 → Postgres
+            sql = sql.replace("datetime('now','localtime')", "NOW()")
+            sql = sql.replace('datetime("now","localtime")', "NOW()")
+            sql = sql.replace("date('now','localtime')", "(NOW() AT TIME ZONE 'Asia/Taipei')::date")
+            sql = sql.replace('date("now","localtime")', "(NOW() AT TIME ZONE 'Asia/Taipei')::date")
             upper = sql.strip().upper()
             # 只有 INSERT 才自動加 RETURNING 並取 lastrowid
             if (upper.startswith("INSERT")
