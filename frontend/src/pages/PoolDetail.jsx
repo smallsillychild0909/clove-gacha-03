@@ -5,27 +5,48 @@ import { useAuth } from "../context/AuthContext";
 import api from "../api/client";
 import { motion, AnimatePresence } from "framer-motion";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "";
+/* 依機率回傳光暈設定
+ * original_probability 是小數，例如 0.0001 = 0.01%
+ */
+function getRarityConfig(prob) {
+    if (prob == null) return null;
+    const p = Number(prob);
+    if (p <= 0.0001) return { color: "red", label: "0.01%", glow: "shadow-red-500/70", bg: "bg-red-500/40", text: "text-red-300", border: "border-red-400/80", name: "紅光" };
+    if (p <= 0.0002) return { color: "orange", label: "0.02%", glow: "shadow-orange-500/70", bg: "bg-orange-500/40", text: "text-orange-300", border: "border-orange-400/80", name: "橙光" };
+    if (p <= 0.0003) return { color: "yellow", label: "0.03%", glow: "shadow-yellow-500/70", bg: "bg-yellow-500/40", text: "text-yellow-300", border: "border-yellow-400/80", name: "黃光" };
+    if (p <= 0.0005) return { color: "blue", label: "0.04~0.05%", glow: "shadow-blue-500/70", bg: "bg-blue-500/40", text: "text-blue-300", border: "border-blue-400/80", name: "藍光" };
+    return null;
+}
 
-/* 卡片背面元件 */
-function CardBack({ className = "" }) {
+/* 卡片背面 */
+function CardBack({ className = "", rarity = null }) {
+    const isRare = !!rarity;
+    const colorMap = {
+        red: { bg: "from-red-950 via-red-800 to-red-950", border: "border-red-400/70", icon: "text-red-200" },
+        orange: { bg: "from-orange-950 via-orange-700 to-orange-950", border: "border-orange-400/70", icon: "text-orange-200" },
+        yellow: { bg: "from-yellow-950 via-amber-700 to-yellow-950", border: "border-yellow-400/70", icon: "text-yellow-200" },
+        blue: { bg: "from-blue-950 via-blue-800 to-blue-950", border: "border-blue-400/70", icon: "text-blue-200" },
+    };
+    const c = isRare ? colorMap[rarity.color] : null;
+
     return (
         <div className={`relative w-full h-full rounded-xl overflow-hidden ${className}`}>
-            <div className="absolute inset-0 bg-gradient-to-br from-[#1a0a2e] via-[#2d1b4e] to-[#0f0a1a]" />
+            <div className={`absolute inset-0 ${isRare ? `bg-gradient-to-br ${c.bg}` : "bg-gradient-to-br from-[#1a0a2e] via-[#2d1b4e] to-[#0f0a1a]"}`} />
             <div className="absolute inset-0 opacity-40">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-pink-400/60 rounded-full" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-purple-400/50 rounded-full" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-pink-400 rounded-full" />
+                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 rounded-full ${isRare ? c.border : "border-pink-400/60"}`} />
+                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border rounded-full ${isRare ? "border-white/40" : "border-purple-400/50"}`} />
+                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full ${isRare ? "bg-white" : "bg-pink-400"}`} />
             </div>
-            <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-pink-400/70" />
-            <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-pink-400/70" />
-            <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-pink-400/70" />
-            <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-pink-400/70" />
+            <div className={`absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 ${isRare ? c.border : "border-pink-400/70"}`} />
+            <div className={`absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 ${isRare ? c.border : "border-pink-400/70"}`} />
+            <div className={`absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 ${isRare ? c.border : "border-pink-400/70"}`} />
+            <div className={`absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 ${isRare ? c.border : "border-pink-400/70"}`} />
             <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-3xl text-pink-300/80 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]">✦</div>
+                <div className={`text-3xl drop-shadow-lg ${isRare ? c.icon : "text-pink-300/80"}`}>
+                    {isRare ? "★" : "✦"}
+                </div>
             </div>
-            <div className="absolute inset-0 rounded-xl border border-pink-500/40 pointer-events-none" />
-            <div className="absolute inset-[2px] rounded-lg border border-white/5 pointer-events-none" />
+            <div className={`absolute inset-0 rounded-xl border pointer-events-none ${isRare ? c.border : "border-pink-500/40"}`} />
         </div>
     );
 }
@@ -61,7 +82,8 @@ export default function PoolDetail() {
     const [results, setResults] = useState(null);
     const [error, setError] = useState("");
     const [animPhase, setAnimPhase] = useState("idle");
-    const [lightbox, setLightbox] = useState(null); // { url, name }
+    const [lightbox, setLightbox] = useState(null);
+    const [bestRarity, setBestRarity] = useState(null);
 
     const load = () => {
         api.getPool(id)
@@ -74,9 +96,10 @@ export default function PoolDetail() {
 
     useEffect(() => {
         if (!results || animPhase !== "spinning") return;
-        const t = setTimeout(() => setAnimPhase("revealing"), 2400);
+        const delay = bestRarity ? 3400 : 2400;
+        const t = setTimeout(() => setAnimPhase("revealing"), delay);
         return () => clearTimeout(t);
-    }, [results, animPhase]);
+    }, [results, animPhase, bestRarity]);
 
     const handleDraw = async (type) => {
         if (!user) {
@@ -86,11 +109,31 @@ export default function PoolDetail() {
         setDrawing(true);
         setError("");
         setResults(null);
+        setBestRarity(null);
         setAnimPhase("spinning");
 
         try {
             const res = await api.draw({ pool_id: Number(id), draw_type: type });
-            setResults(res);
+
+            // 為每張結果附加機率與稀有度
+            const enriched = (res.results || []).map((r) => {
+                const card = pool?.cards?.find((c) => c.id === r.card_id);
+                const rarity = getRarityConfig(card?.original_probability);
+                return { ...r, original_probability: card?.original_probability, rarity };
+            });
+
+            // 找出最稀有的（機率最低且在範圍內）
+            let best = null;
+            for (const r of enriched) {
+                if (r.rarity) {
+                    if (!best || Number(r.original_probability) < Number(best.original_probability)) {
+                        best = r;
+                    }
+                }
+            }
+            setBestRarity(best?.rarity || null);
+            setResults({ ...res, results: enriched });
+
             await refreshUser();
             load();
         } catch (err) {
@@ -112,6 +155,7 @@ export default function PoolDetail() {
     if (!pool) return null;
 
     const showOverlay = animPhase !== "idle";
+    const rarity = bestRarity;
 
     return (
         <div className="relative">
@@ -125,7 +169,7 @@ export default function PoolDetail() {
                         exit="exit"
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md"
                     >
-                        {/* 旋轉卡片召喚 */}
+                        {/* 旋轉召喚 */}
                         {animPhase === "spinning" && (
                             <motion.div
                                 initial={{ scale: 0.7, opacity: 0 }}
@@ -137,35 +181,45 @@ export default function PoolDetail() {
                                         <motion.div
                                             key={i}
                                             className="absolute top-1/2 left-1/2 w-32 h-44 -ml-16 -mt-22"
-                                            animate={{ rotateY: [0, 360] }}
+                                            animate={{
+                                                rotateY: [0, 360],
+                                                scale: rarity ? [1, 1.1, 1] : 1,
+                                            }}
                                             transition={{
-                                                duration: 4,
-                                                repeat: Infinity,
-                                                ease: "linear",
-                                                delay: i * 0.12,
+                                                rotateY: { duration: rarity ? 2.6 : 4, repeat: Infinity, ease: "linear", delay: i * 0.1 },
+                                                scale: rarity ? { duration: 1.0, repeat: Infinity } : {},
                                             }}
                                             style={{
                                                 transformStyle: "preserve-3d",
                                                 rotateY: i * 72,
                                             }}
                                         >
-                                            <div className="w-full h-full rounded-xl shadow-2xl shadow-pink-500/40">
-                                                <CardBack />
+                                            <div className={`w-full h-full rounded-xl shadow-2xl ${rarity ? rarity.glow : "shadow-pink-500/40"}`}>
+                                                <CardBack rarity={rarity} />
                                             </div>
                                         </motion.div>
                                     ))}
                                     <motion.div
-                                        className="absolute inset-0 rounded-full bg-pink-500/25 blur-3xl"
-                                        animate={{ scale: [0.7, 1.3, 0.7], opacity: [0.3, 0.7, 0.3] }}
-                                        transition={{ duration: 2.2, repeat: Infinity }}
+                                        className={`absolute inset-0 rounded-full blur-3xl ${rarity ? rarity.bg : "bg-pink-500/25"}`}
+                                        animate={{ scale: [0.6, 1.5, 0.6], opacity: [0.3, 0.95, 0.3] }}
+                                        transition={{ duration: rarity ? 1.4 : 2.2, repeat: Infinity }}
                                     />
+                                    {rarity && (
+                                        <motion.div
+                                            className={`absolute inset-0 flex items-center justify-center text-6xl ${rarity.text}`}
+                                            animate={{ opacity: [0.4, 1, 0.4], scale: [0.85, 1.15, 0.85] }}
+                                            transition={{ duration: 0.9, repeat: Infinity }}
+                                        >
+                                            ★
+                                        </motion.div>
+                                    )}
                                 </div>
                                 <motion.p
-                                    animate={{ opacity: [0.4, 1, 0.4] }}
-                                    transition={{ duration: 1.5, repeat: Infinity }}
-                                    className="text-2xl text-pink-300 font-semibold tracking-widest"
+                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                    transition={{ duration: rarity ? 0.9 : 1.5, repeat: Infinity }}
+                                    className={`text-2xl font-semibold tracking-widest ${rarity ? rarity.text : "text-pink-300"}`}
                                 >
-                                    正在召喚卡片...
+                                    {rarity ? `${rarity.name}召喚中...` : "正在召喚卡片..."}
                                 </motion.p>
                             </motion.div>
                         )}
@@ -179,36 +233,43 @@ export default function PoolDetail() {
                             >
                                 <h3 className="text-2xl font-bold text-pink-300 mb-8">抽卡結果</h3>
                                 <div className="flex flex-wrap justify-center gap-5">
-                                    {results.results.map((r, i) => (
-                                        <motion.div
-                                            key={i}
-                                            custom={i}
-                                            variants={cardVariants}
-                                            initial="hidden"
-                                            animate="visible"
-                                            className="w-28 sm:w-32 cursor-pointer"
-                                            style={{ perspective: 1000 }}
-                                            onClick={() => openLightbox(r.image_url, r.name)}
-                                        >
-                                            <div
-                                                className="aspect-[3/4] rounded-xl overflow-hidden bg-dark-900 border-2 border-pink-500/70 shadow-xl shadow-pink-500/30"
-                                                style={{ transformStyle: "preserve-3d" }}
+                                    {results.results.map((r, i) => {
+                                        const rc = r.rarity;
+                                        return (
+                                            <motion.div
+                                                key={i}
+                                                custom={i}
+                                                variants={cardVariants}
+                                                initial="hidden"
+                                                animate="visible"
+                                                className="w-28 sm:w-32 cursor-pointer relative"
+                                                style={{ perspective: 1000 }}
+                                                onClick={() => openLightbox(r.image_url, r.name)}
                                             >
-                                                {r.image_url ? (
-                                                    <img
-                                                        src={imgSrc(r.image_url)}
-                                                        alt={r.name}
-                                                        className="w-full h-full object-cover"
+                                                {rc && (
+                                                    <motion.div
+                                                        className={`absolute -inset-2 rounded-2xl blur-md ${rc.bg}`}
+                                                        animate={{ opacity: [0.4, 0.9, 0.4] }}
+                                                        transition={{ duration: 1.2, repeat: Infinity }}
                                                     />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-dark-800 to-dark-900">
-                                                        🎴
-                                                    </div>
                                                 )}
-                                            </div>
-                                            <p className="mt-2 text-sm text-center text-gray-200 truncate">{r.name}</p>
-                                        </motion.div>
-                                    ))}
+                                                <div
+                                                    className={`relative aspect-[3/4] rounded-xl overflow-hidden bg-dark-900 border-2 shadow-xl ${rc ? rc.border + " " + rc.glow : "border-pink-500/70 shadow-pink-500/30"}`}
+                                                    style={{ transformStyle: "preserve-3d" }}
+                                                >
+                                                    {r.image_url ? (
+                                                        <img src={imgSrc(r.image_url)} alt={r.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-dark-800 to-dark-900">🎴</div>
+                                                    )}
+                                                </div>
+                                                <p className={`mt-2 text-sm text-center truncate ${rc ? rc.text : "text-gray-200"}`}>
+                                                    {r.name}
+                                                    {rc && <span className="block text-xs">{rc.label}</span>}
+                                                </p>
+                                            </motion.div>
+                                        );
+                                    })}
                                 </div>
                                 <motion.button
                                     initial={{ opacity: 0, y: 10 }}
@@ -240,7 +301,7 @@ export default function PoolDetail() {
                                             className="w-24 cursor-pointer"
                                             onClick={() => openLightbox(r.image_url, r.name)}
                                         >
-                                            <div className="aspect-[3/4] rounded-lg overflow-hidden border border-pink-500/50">
+                                            <div className={`aspect-[3/4] rounded-lg overflow-hidden border ${r.rarity ? r.rarity.border : "border-pink-500/50"}`}>
                                                 {r.image_url ? (
                                                     <img src={imgSrc(r.image_url)} alt={r.name} className="w-full h-full object-cover" />
                                                 ) : (
@@ -384,7 +445,7 @@ export default function PoolDetail() {
                 </div>
             )}
 
-            {/* 圖片放大 Lightbox */}
+            {/* Lightbox */}
             <AnimatePresence>
                 {lightbox && (
                     <motion.div
