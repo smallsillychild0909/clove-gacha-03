@@ -1140,13 +1140,26 @@ def my_shippings(user: dict = Depends(require_member)):
 @app.get("/api/admin/shippings/today")
 def admin_shippings_today(admin: dict = Depends(require_admin)):
     conn = get_db()
-    rows = conn.execute("""
-        SELECT s.*, u.username
-        FROM shipping_orders s
-        LEFT JOIN users u ON s.user_id = u.id
-        WHERE date(s.created_at) = date('now','localtime')
-        ORDER BY s.id DESC
-    """).fetchall()
+    try:
+        rows = conn.execute("""
+            SELECT s.*, u.username
+            FROM shipping_orders s
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE (s.created_at AT TIME ZONE 'Asia/Taipei')::date = (NOW() AT TIME ZONE 'Asia/Taipei')::date
+            ORDER BY s.id DESC
+        """).fetchall()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        rows = conn.execute("""
+            SELECT s.*, u.username
+            FROM shipping_orders s
+            LEFT JOIN users u ON s.user_id = u.id
+            ORDER BY s.id DESC
+            LIMIT 100
+        """).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
