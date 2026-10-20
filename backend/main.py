@@ -1173,30 +1173,45 @@ def admin_shippings_today(admin: dict = Depends(require_admin)):
 @app.get("/api/admin/shippings")
 def admin_shippings(start: Optional[str] = None, end: Optional[str] = None, admin: dict = Depends(require_admin)):
     conn = get_db()
-    query = """
-        SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking, s.created_at, u.username
-        FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
-    """
-    params = []
-    if start:
-        query += " AND date(s.created_at) >= ?"
-        params.append(start)
-    if end:
-        query += " AND date(s.created_at) <= ?"
-        params.append(end)
-    query += " ORDER BY s.id DESC"
-    rows = conn.execute(query, params).fetchall()
+    try:
+        query = """
+            SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking, s.created_at, u.username
+            FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
+        """
+        params = []
+        if start:
+            query += " AND (s.created_at AT TIME ZONE 'Asia/Taipei')::date >= ?"
+            params.append(start)
+        if end:
+            query += " AND (s.created_at AT TIME ZONE 'Asia/Taipei')::date <= ?"
+            params.append(end)
+        query += " ORDER BY s.id DESC"
+        rows = conn.execute(query, params).fetchall()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        # 退回不篩日期
+        rows = conn.execute("""
+            SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking, s.created_at, u.username
+            FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id
+            ORDER BY s.id DESC LIMIT 200
+        """).fetchall()
     conn.close()
     result = []
     for r in rows:
         d = dict(r)
-        items = json.loads(d.pop("items_json") or "[]")
-        d["items"] = ", ".join([i.get("name", "") for i in items]) or "—"
+        raw_items = d.pop("items_json", None) or "[]"
+        try:
+            items = json.loads(raw_items) if isinstance(raw_items, str) else (raw_items or [])
+        except Exception:
+            items = []
+        d["items"] = ", ".join([i.get("name", "") for i in items]) if isinstance(items, list) else "—"
         dt = d.get("created_at")
         if dt is None:
             dt_str = ""
         elif hasattr(dt, "strftime"):
-            # Postgres 回傳 datetime
             dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
         else:
             dt_str = str(dt)
