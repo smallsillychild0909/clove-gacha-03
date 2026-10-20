@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
 import api from "../../api/client";
 
+// 將時間字串轉成 UTC+8 顯示（YYYY-MM-DD HH:mm:ss）
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return "";
+  let s = String(dateStr).trim();
+  if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    s = s.includes("T") ? s + "Z" : s.replace(" ", "T") + "Z";
+  }
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return String(dateStr);
+  const utc8 = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${utc8.getUTCFullYear()}-${pad(utc8.getUTCMonth() + 1)}-${pad(utc8.getUTCDate())} ${pad(utc8.getUTCHours())}:${pad(utc8.getUTCMinutes())}:${pad(utc8.getUTCSeconds())}`;
+};
+
+const formatTimeOnly = (dateStr) => {
+  const full = formatDateTime(dateStr);
+  return full ? full.slice(11, 16) : "";
+};
+
 export default function AdminShipping() {
   const [tab, setTab] = useState("today");
   const [todayOrders, setTodayOrders] = useState([]);
@@ -70,7 +89,10 @@ export default function AdminShipping() {
   const exportCSV = (list, filename) => {
     if (!list.length) return alert("沒有資料");
     const headers = ["訂單編號","填單日期","填單時間","獎池名稱","獎池物品","出貨狀態","貨運公司","貨運單號"];
-    const rows = list.map(o => [o.order_no, o.fillDate, o.fillTime, o.pool_name, o.items, o.status, o.company||"", o.tracking||""]);
+    const rows = list.map(o => {
+      const ft = formatDateTime(o.created_at);
+      return [o.order_no, ft.slice(0, 10) || o.fillDate, ft.slice(11, 16) || o.fillTime, o.pool_name, o.items, o.status, o.company||"", o.tracking||""];
+    });
     const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -108,7 +130,7 @@ export default function AdminShipping() {
               <tr key={o.order_no} className="border-b border-gray-900 hover:bg-dark-800/40 cursor-pointer" onClick={() => openEdit(o)}>
                 <td className="py-2">{o.order_no}</td>
                 <td className="py-2">{o.username}</td>
-                <td className="py-2">{o.created_at?.slice(11,16)}</td>
+                <td className="py-2">{formatTimeOnly(o.created_at)}</td>
                 <td className="py-2">{o.pool_name}</td>
                 <td className="py-2">{o.status}</td>
                 <td className="py-2 text-purple-400">編輯</td>
@@ -146,8 +168,8 @@ export default function AdminShipping() {
               {pendingOrders.map(o => (
                 <tr key={o.order_no} className="border-b border-gray-900 hover:bg-dark-800/40 cursor-pointer" onClick={() => openEdit(o)}>
                   <td className="py-2 pr-3">{o.order_no}</td>
-                  <td className="py-2 pr-3">{o.fillDate}</td>
-                  <td className="py-2 pr-3">{o.fillTime}</td>
+                  <td className="py-2 pr-3">{formatDateTime(o.created_at).slice(0, 10) || o.fillDate}</td>
+                  <td className="py-2 pr-3">{formatDateTime(o.created_at).slice(11, 16) || o.fillTime}</td>
                   <td className="py-2 pr-3">{o.username}</td>
                   <td className="py-2 pr-3">{o.pool_name}</td>
                   <td className="py-2 pr-3">{o.items}</td>
@@ -189,8 +211,8 @@ export default function AdminShipping() {
               {allOrders.map(o => (
                 <tr key={o.order_no} className="border-b border-gray-900">
                   <td className="py-2 pr-3">{o.order_no}</td>
-                  <td className="py-2 pr-3">{o.fillDate}</td>
-                  <td className="py-2 pr-3">{o.fillTime}</td>
+                  <td className="py-2 pr-3">{formatDateTime(o.created_at).slice(0, 10) || o.fillDate}</td>
+                  <td className="py-2 pr-3">{formatDateTime(o.created_at).slice(11, 16) || o.fillTime}</td>
                   <td className="py-2 pr-3">{o.pool_name}</td>
                   <td className="py-2 pr-3">{o.items}</td>
                   <td className="py-2 pr-3">{o.status}</td>
