@@ -4,20 +4,6 @@ import api from "../api/client";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
-// 將時間字串轉成 UTC+8 顯示（YYYY-MM-DD HH:mm:ss）
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return "";
-  let s = String(dateStr).trim();
-  if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
-    s = s.includes("T") ? s + "Z" : s.replace(" ", "T") + "Z";
-  }
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return String(dateStr);
-  const utc8 = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${utc8.getUTCFullYear()}-${pad(utc8.getUTCMonth() + 1)}-${pad(utc8.getUTCDate())} ${pad(utc8.getUTCHours())}:${pad(utc8.getUTCMinutes())}:${pad(utc8.getUTCSeconds())}`;
-};
-
 export default function MyRecords() {
   const [draws, setDraws] = useState([]);
   const [txs, setTxs] = useState([]);
@@ -128,7 +114,7 @@ export default function MyRecords() {
             <div key={r.id} className="bg-dark-800/60 rounded-xl p-4 border border-pink-900/20">
               <div className="flex justify-between text-sm text-gray-400 mb-2">
                 <span>{r.pool_name || `獎池 #${r.pool_id}`}</span>
-                <span>{formatDateTime(r.created_at)} · {r.draw_type === "single" ? "單抽" : "十連"} · -{r.cost_points} pt</span>
+                <span>{r.created_at} · {r.draw_type === "single" ? "單抽" : "十連"} · -{r.cost_points} pt</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(r.results || []).map((c, i) => (
@@ -149,7 +135,7 @@ export default function MyRecords() {
           <div className="space-y-4 mb-6">
             {draws.map((r) => (
               <div key={r.id} className="bg-dark-800/60 rounded-xl p-4 border border-pink-900/20">
-                <div className="text-sm text-gray-400 mb-2">{r.pool_name || `獎池 #${r.pool_id}`} · {formatDateTime(r.created_at)}</div>
+                <div className="text-sm text-gray-400 mb-2">{r.pool_name || `獎池 #${r.pool_id}`} · {r.created_at}</div>
                 <div className="flex flex-wrap gap-2">
                   {(r.results || []).map((c, i) => {
                     const key = `${r.id}-${i}`;
@@ -193,13 +179,13 @@ export default function MyRecords() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-400 border-b border-gray-800">
-                <th className="py-2 pr-4">時間 (UTC+8)</th><th className="py-2 pr-4">類型</th><th className="py-2 pr-4">金額</th><th className="py-2 pr-4">餘額</th><th className="py-2">備註</th>
+                <th className="py-2 pr-4">時間</th><th className="py-2 pr-4">類型</th><th className="py-2 pr-4">金額</th><th className="py-2 pr-4">餘額</th><th className="py-2">備註</th>
               </tr>
             </thead>
             <tbody>
               {txs.map((t) => (
                 <tr key={t.id} className="border-b border-gray-900">
-                  <td className="py-2 pr-4 text-gray-500">{formatDateTime(t.created_at)}</td>
+                  <td className="py-2 pr-4 text-gray-500">{t.created_at}</td>
                   <td className="py-2 pr-4">{t.type}</td>
                   <td className={`py-2 pr-4 font-medium ${t.amount > 0 ? "text-green-400" : "text-red-400"}`}>{t.amount > 0 ? "+" : ""}{t.amount}</td>
                   <td className="py-2 pr-4">{t.balance_after}</td>
@@ -232,7 +218,7 @@ export default function MyRecords() {
                   <td className="py-2 pr-4">{s.pool_name}</td>
                   <td className="py-2 pr-4">{s.items}</td>
                   <td className="py-2 pr-4">{s.status === "received" ? "接收訂單" : s.status === "shipping" ? "出貨中" : "已出貨"}</td>
-                  <td className="py-2 pr-4">{s.packaging_note ? formatDateTime(s.packaging_note) : "—"}</td>
+                  <td className="py-2 pr-4">{s.packaging_note || "—"}</td>
                   <td className={`py-2 pr-4 ${s.status !== "shipped" ? "text-gray-600" : ""}`}>{s.status === "shipped" ? (s.company || "—") : "—"}</td>
                   <td className={`py-2 ${s.status !== "shipped" ? "text-gray-600" : ""}`}>{s.status === "shipped" ? (s.tracking || "—") : "—"}</td>
                 </tr>
