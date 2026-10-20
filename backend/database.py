@@ -49,6 +49,13 @@ class _CompatCursor:
         is_insert_returning = False
         if self.is_pg:
             sql = sql.replace("?", "%s")
+            # SQLite 的 INSERT OR IGNORE → Postgres 的 ON CONFLICT DO NOTHING
+            if "INSERT OR IGNORE" in sql.upper():
+                sql = sql.replace("INSERT OR IGNORE", "INSERT", 1)
+                if "redeemed_cards" in sql.lower():
+                    sql = sql.rstrip().rstrip(";") + " ON CONFLICT (user_id, card_key) DO NOTHING"
+                else:
+                    sql = sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
             upper = sql.strip().upper()
             # 只有 INSERT 才自動加 RETURNING 並取 lastrowid
             if (upper.startswith("INSERT")
