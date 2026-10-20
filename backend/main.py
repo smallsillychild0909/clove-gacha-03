@@ -1131,9 +1131,16 @@ def my_shippings(user: dict = Depends(require_member)):
         d = dict(r)
         items = json.loads(d.pop("items_json") or "[]")
         d["items"] = ", ".join([i.get("name", "") for i in items]) or "—"
-        dt = d["created_at"] or ""
-        d["fillDate"] = dt[:10] if len(dt) >= 10 else ""
-        d["fillTime"] = dt[11:16] if len(dt) >= 16 else ""
+        dt = d.get("created_at")
+        if dt is None:
+            dt_str = ""
+        elif hasattr(dt, "strftime"):
+            dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            dt_str = str(dt)
+        d["created_at"] = dt_str
+        d["fillDate"] = dt_str[:10] if len(dt_str) >= 10 else ""
+        d["fillTime"] = dt_str[11:16] if len(dt_str) >= 16 else ""
         result.append(d)
     return result
 
@@ -1185,9 +1192,17 @@ def admin_shippings(start: Optional[str] = None, end: Optional[str] = None, admi
         d = dict(r)
         items = json.loads(d.pop("items_json") or "[]")
         d["items"] = ", ".join([i.get("name", "") for i in items]) or "—"
-        dt = d["created_at"] or ""
-        d["fillDate"] = dt[:10] if len(dt) >= 10 else ""
-        d["fillTime"] = dt[11:16] if len(dt) >= 16 else ""
+        dt = d.get("created_at")
+        if dt is None:
+            dt_str = ""
+        elif hasattr(dt, "strftime"):
+            # Postgres 回傳 datetime
+            dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            dt_str = str(dt)
+        d["created_at"] = dt_str
+        d["fillDate"] = dt_str[:10] if len(dt_str) >= 10 else ""
+        d["fillTime"] = dt_str[11:16] if len(dt_str) >= 16 else ""
         result.append(d)
     return result
 
