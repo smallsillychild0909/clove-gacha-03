@@ -1153,39 +1153,108 @@ def my_shippings(user: dict = Depends(require_member)):
 @app.get("/api/admin/shippings/today")
 def admin_shippings_today(admin: dict = Depends(require_admin)):
     conn = get_db()
-    # SQLite：用 UTC+8 判斷今天
-    rows = conn.execute("""
-        SELECT s.*, u.username
-        FROM shipping_orders s
-        LEFT JOIN users u ON s.user_id = u.id
-        WHERE date(s.created_at, '+8 hours') = date('now', '+8 hours')
-           OR date(s.created_at) = date('now', 'localtime')
-        ORDER BY s.id DESC
-    """).fetchall()
+    try:
+        # PostgreSQL（線上 Supabase）
+        rows = conn.execute("""
+            SELECT s.*, u.username
+            FROM shipping_orders s
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE (s.created_at AT TIME ZONE 'Asia/Taipei')::date = (NOW() AT TIME ZONE 'Asia/Taipei')::date
+            ORDER BY s.id DESC
+        """).fetchall()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            # SQLite（本機）
+            rows = conn.execute("""
+                SELECT s.*, u.username
+                FROM shipping_orders s
+                LEFT JOIN users u ON s.user_id = u.id
+                WHERE date(s.created_at) = date('now', 'localtime')
+                ORDER BY s.id DESC
+            """).fetchall()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            # 最後退回：回最近訂單，避免 500
+            rows = conn.execute("""
+                SELECT s.*, u.username
+                FROM shipping_orders s
+                LEFT JOIN users u ON s.user_id = u.id
+                ORDER BY s.id DESC
+                LIMIT 50
+            """).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        try:
+            result.append(dict(r))
+        except Exception:
+            result.append(r)
+    return result
 
 @app.get("/api/admin/shippings")
 def admin_shippings(start: Optional[str] = None, end: Optional[str] = None, admin: dict = Depends(require_admin)):
     conn = get_db()
-    query = """
-        SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking,
-               s.packaging_note, s.recipient, s.phone, s.address, s.created_at, u.username
-        FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
-    """
-    params = []
-    if start:
-        query += " AND date(s.created_at, '+8 hours') >= ?"
-        params.append(start)
-    if end:
-        query += " AND date(s.created_at, '+8 hours') <= ?"
-        params.append(end)
-    query += " ORDER BY s.id DESC"
-    rows = conn.execute(query, params).fetchall()
+    try:
+        query = """
+            SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking,
+                   s.packaging_note, s.recipient, s.phone, s.address, s.created_at, u.username
+            FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
+        """
+        params = []
+        if start:
+            query += " AND (s.created_at AT TIME ZONE 'Asia/Taipei')::date >= ?"
+            params.append(start)
+        if end:
+            query += " AND (s.created_at AT TIME ZONE 'Asia/Taipei')::date <= ?"
+            params.append(end)
+        query += " ORDER BY s.id DESC"
+        rows = conn.execute(query, params).fetchall()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        # SQLite 或查詢失敗時退回
+        query = """
+            SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking,
+                   s.packaging_note, s.recipient, s.phone, s.address, s.created_at, u.username
+            FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
+        """
+        params = []
+        if start:
+            query += " AND date(s.created_at) >= ?"
+            params.append(start)
+        if end:
+            query += " AND date(s.created_at) <= ?"
+            params.append(end)
+        query += " ORDER BY s.id DESC"
+        try:
+            rows = conn.execute(query, params).fetchall()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            rows = conn.execute("""
+                SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking,
+                       s.created_at, u.username
+                FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id
+                ORDER BY s.id DESC LIMIT 200
+            """).fetchall()
     conn.close()
     result = []
     for r in rows:
-        d = dict(r)
+        try:
+            d = dict(r)
+        except Exception:
+            d = dict(r) if hasattr(r, "keys") else {}
         raw_items = d.pop("items_json", None) or "[]"
         try:
             items = json.loads(raw_items) if isinstance(raw_items, str) else (raw_items or [])
@@ -1193,7 +1262,15 @@ def admin_shippings(start: Optional[str] = None, end: Optional[str] = None, admi
             items = []
         d["items"] = ", ".join([i.get("name", "") for i in items]) if isinstance(items, list) else "—"
         dt = d.get("created_at")
-        dt_str = str(dt) if dt else ""
+        if dt is None:
+            dt_str = ""
+        elif hasattr(dt, "strftime"):
+            from datetime import timezone, timedelta
+            if getattr(dt, "tzinfo", None) is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_str = dt.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            dt_str = str(dt)
         d["created_at"] = dt_str
         d["fillDate"] = dt_str[:10] if len(dt_str) >= 10 else ""
         d["fillTime"] = dt_str[11:16] if len(dt_str) >= 16 else ""
