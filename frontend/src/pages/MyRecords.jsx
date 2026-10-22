@@ -99,7 +99,7 @@ export default function MyRecords() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-pink-300 mb-6">我的紀錄</h1>
+      <h1 className="text-2xl font-bold text-pink-300 mb-6">我的功能</h1>
       <div className="flex flex-wrap gap-2 mb-6">
         <button onClick={() => setTab("draw")} className={`px-4 py-2 rounded-lg ${tab === "draw" ? "bg-pink-600" : "bg-dark-800"}`}>抽卡紀錄</button>
         <button onClick={() => setTab("redeem")} className={`px-4 py-2 rounded-lg ${tab === "redeem" ? "bg-pink-600" : "bg-dark-800"}`}>獎品兌換</button>
