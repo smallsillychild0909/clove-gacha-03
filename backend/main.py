@@ -108,15 +108,17 @@ _default_origins = [
     "http://localhost:4173",
     "http://127.0.0.1:4173",
     "https://clove-gacha-03.vercel.app",
+    "https://clove-gacha-03.vercel.app/",
 ]
 _env_origins = os.getenv("CORS_ORIGINS", "")
 allow_origins = _default_origins + [o.strip() for o in _env_origins.split(",") if o.strip()]
-if os.getenv("CORS_ALLOW_ALL", "").lower() in ("1", "true", "yes"):
-    allow_origins = ["*"]
+# 線上預設也允許 vercel.app 子網域，避免漏設
+allow_origin_regex = r"https://.*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1153,49 +1155,50 @@ def my_shippings(user: dict = Depends(require_member)):
 @app.get("/api/admin/shippings/today")
 def admin_shippings_today(admin: dict = Depends(require_admin)):
     conn = get_db()
-    try:
-        # PostgreSQL（線上 Supabase）
-        rows = conn.execute("""
-            SELECT s.*, u.username
-            FROM shipping_orders s
-            LEFT JOIN users u ON s.user_id = u.id
-            WHERE (s.created_at AT TIME ZONE 'Asia/Taipei')::date = (NOW() AT TIME ZONE 'Asia/Taipei')::date
-            ORDER BY s.id DESC
-        """).fetchall()
-    except Exception:
+    rows = []
+    queries = [
+        # PostgreSQL 今日（Asia/Taipei）
+        """
+        SELECT s.*, u.username
+        FROM shipping_orders s
+        LEFT JOIN users u ON s.user_id = u.id
+        WHERE (s.created_at AT TIME ZONE 'Asia/Taipei')::date = (NOW() AT TIME ZONE 'Asia/Taipei')::date
+        ORDER BY s.id DESC
+        """,
+        # SQLite 今日
+        """
+        SELECT s.*, u.username
+        FROM shipping_orders s
+        LEFT JOIN users u ON s.user_id = u.id
+        WHERE date(s.created_at) = date('now', 'localtime')
+        ORDER BY s.id DESC
+        """,
+        # 最後退回：最近訂單，避免 500
+        """
+        SELECT s.*, u.username
+        FROM shipping_orders s
+        LEFT JOIN users u ON s.user_id = u.id
+        ORDER BY s.id DESC
+        LIMIT 50
+        """,
+    ]
+    for q in queries:
         try:
-            conn.rollback()
-        except Exception:
-            pass
-        try:
-            # SQLite（本機）
-            rows = conn.execute("""
-                SELECT s.*, u.username
-                FROM shipping_orders s
-                LEFT JOIN users u ON s.user_id = u.id
-                WHERE date(s.created_at) = date('now', 'localtime')
-                ORDER BY s.id DESC
-            """).fetchall()
+            rows = conn.execute(q).fetchall()
+            break
         except Exception:
             try:
                 conn.rollback()
             except Exception:
                 pass
-            # 最後退回：回最近訂單，避免 500
-            rows = conn.execute("""
-                SELECT s.*, u.username
-                FROM shipping_orders s
-                LEFT JOIN users u ON s.user_id = u.id
-                ORDER BY s.id DESC
-                LIMIT 50
-            """).fetchall()
+            continue
     conn.close()
     result = []
     for r in rows:
         try:
             result.append(dict(r))
         except Exception:
-            result.append(r)
+            pass
     return result
 
 @app.get("/api/admin/shippings")
