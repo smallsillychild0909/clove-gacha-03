@@ -107,6 +107,7 @@ _default_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
+    "https://clove-gacha-03.vercel.app",
 ]
 _env_origins = os.getenv("CORS_ORIGINS", "")
 allow_origins = _default_origins + [o.strip() for o in _env_origins.split(",") if o.strip()]
