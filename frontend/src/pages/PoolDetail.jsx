@@ -315,12 +315,24 @@ export default function PoolDetail() {
                                 <p className="text-gray-400 mb-5">
                                     花費 {results.cost} pt · 剩餘 {results.remaining_points} pt
                                 </p>
-                                <button
-                                    onClick={closeAnimation}
-                                    className="px-10 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 font-medium"
-                                >
-                                    關閉
-                                </button>
+                                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                                    <button
+                                        onClick={() => {
+                                            closeAnimation();
+                                            handleDraw("ten");
+                                        }}
+                                        disabled={drawing || (pool?.remaining_quantity ?? 0) < 10}
+                                        className="px-8 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 font-medium"
+                                    >
+                                        再十連抽 {pool?.cost_ten ?? ""} pt
+                                    </button>
+                                    <button
+                                        onClick={closeAnimation}
+                                        className="px-10 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 font-medium"
+                                    >
+                                        關閉
+                                    </button>
+                                </div>
                             </motion.div>
                         )}
                     </motion.div>
