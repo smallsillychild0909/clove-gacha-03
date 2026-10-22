@@ -32,65 +32,6 @@ init_db()
 UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# Supabase Storage（有設定就壓縮後上傳雲端，否則存本機）
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "gacha-images")
-
-def save_image(file, prefix: str = "img") -> str:
-    """儲存上傳圖片。優先壓縮後上傳 Supabase Storage，否則存本機。"""
-    from pathlib import Path as _P
-    from io import BytesIO
-
-    raw = file.file.read()
-    content_type = "image/jpeg"
-    filename_ext = ".jpg"
-
-    try:
-        from PIL import Image
-        img = Image.open(BytesIO(raw))
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        max_side = 1200
-        if max(img.size) > max_side:
-            ratio = max_side / max(img.size)
-            new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
-            img = img.resize(new_size, Image.LANCZOS)
-        buf = BytesIO()
-        img.save(buf, format="JPEG", quality=82, optimize=True)
-        raw = buf.getvalue()
-    except Exception:
-        ext = _P(getattr(file, "filename", "") or "").suffix.lower() or ".jpg"
-        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
-            ext = ".jpg"
-        filename_ext = ext
-        content_type = getattr(file, "content_type", None) or "image/jpeg"
-
-    filename = f"{prefix}_{uuid.uuid4().hex}{filename_ext}"
-
-    if SUPABASE_URL and SUPABASE_SERVICE_KEY:
-        try:
-            import httpx
-        except ImportError:
-            raise HTTPException(500, "請安裝 httpx")
-        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}"
-        headers = {
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Content-Type": content_type,
-            "x-upsert": "true",
-            "Cache-Control": "public, max-age=31536000",
-        }
-        resp = httpx.post(url, content=raw, headers=headers, timeout=60)
-        if resp.status_code not in (200, 201):
-            raise HTTPException(500, f"圖片上傳失敗 ({resp.status_code}): {resp.text[:200]}")
-        return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
-    else:
-        filepath = UPLOAD_DIR / filename
-        with open(filepath, "wb") as f:
-            f.write(raw)
-        return f"/uploads/{filename}"
-
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173").rstrip("/")
@@ -102,20 +43,14 @@ if stripe and STRIPE_SECRET_KEY:
 
 app = FastAPI(title="Clove 抽卡平台 API", version="1.0.0")
 
-_default_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
-]
-_env_origins = os.getenv("CORS_ORIGINS", "")
-allow_origins = _default_origins + [o.strip() for o in _env_origins.split(",") if o.strip()]
-if os.getenv("CORS_ALLOW_ALL", "").lower() in ("1", "true", "yes"):
-    allow_origins = ["*"]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -669,7 +604,12 @@ def admin_create_pool(
 
     image_url = None
     if image and image.filename:
-        image_url = save_image(image, "pool")
+        ext = Path(image.filename).suffix or ".jpg"
+        filename = f"pool_{uuid.uuid4().hex}{ext}"
+        filepath = UPLOAD_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(image.file.read())
+        image_url = f"/uploads/{filename}"
 
     conn = get_db()
     # 新獎池排在最後
@@ -742,8 +682,13 @@ def admin_update_pool(
         updates.append("remaining_quantity = ?")
         params.append(new_remaining)
     if image and image.filename:
+        ext = Path(image.filename).suffix or ".jpg"
+        filename = f"pool_{uuid.uuid4().hex}{ext}"
+        filepath = UPLOAD_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(image.file.read())
         updates.append("image_url = ?")
-        params.append(save_image(image, "pool"))
+        params.append(f"/uploads/{filename}")
 
     if updates:
         params.append(pool_id)
@@ -814,7 +759,12 @@ def admin_add_card(
 
     image_url = None
     if image and image.filename:
-        image_url = save_image(image, "card")
+        ext = Path(image.filename).suffix or ".jpg"
+        filename = f"card_{uuid.uuid4().hex}{ext}"
+        filepath = UPLOAD_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(image.file.read())
+        image_url = f"/uploads/{filename}"
 
     # 若未指定概率，依數量佔總量比例計算
     prob = original_probability
@@ -899,8 +849,13 @@ def admin_update_card(
         params.append(original_probability)
 
     if image and image.filename:
+        ext = Path(image.filename).suffix or ".jpg"
+        filename = f"card_{uuid.uuid4().hex}{ext}"
+        filepath = UPLOAD_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(image.file.read())
         updates.append("image_url = ?")
-        params.append(save_image(image, "card"))
+        params.append(f"/uploads/{filename}")
 
     if updates:
         params.append(card_id)
@@ -1087,8 +1042,9 @@ def redeem_to_coins(req: RedeemCoinsRequest, user: dict = Depends(require_member
 def extract_cards(req: ExtractRequest, user: dict = Depends(require_member)):
     if not req.cards or not req.recipient or not req.phone or not req.address:
         raise HTTPException(400, "請填寫完整資訊")
-    import datetime
-    order_no = f"ORD-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    from datetime import datetime, timezone, timedelta
+    tz_hk = timezone(timedelta(hours=8))
+    order_no = f"ORD-{datetime.now(tz_hk).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     pool_name = req.cards[0].get("pool_name") or "未知獎池"
     pool_id = req.cards[0].get("pool_id")
     items_json = json.dumps(req.cards, ensure_ascii=False)
@@ -1131,102 +1087,51 @@ def my_shippings(user: dict = Depends(require_member)):
         d = dict(r)
         items = json.loads(d.pop("items_json") or "[]")
         d["items"] = ", ".join([i.get("name", "") for i in items]) or "—"
-        dt = d.get("created_at")
-        if dt is None:
-            dt_str = ""
-        elif hasattr(dt, "strftime"):
-            # Postgres datetime 是 UTC，轉成 Asia/Taipei (+8)
-            from datetime import timezone, timedelta
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            dt_local = dt.astimezone(timezone(timedelta(hours=8)))
-            dt_str = dt_local.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            dt_str = str(dt)
-        d["created_at"] = dt_str
-        d["fillDate"] = dt_str[:10] if len(dt_str) >= 10 else ""
-        d["fillTime"] = dt_str[11:16] if len(dt_str) >= 16 else ""
+        dt = d["created_at"] or ""
+        d["fillDate"] = dt[:10] if len(dt) >= 10 else ""
+        d["fillTime"] = dt[11:16] if len(dt) >= 16 else ""
         result.append(d)
     return result
 
 @app.get("/api/admin/shippings/today")
 def admin_shippings_today(admin: dict = Depends(require_admin)):
     conn = get_db()
-    try:
-        rows = conn.execute("""
-            SELECT s.*, u.username
-            FROM shipping_orders s
-            LEFT JOIN users u ON s.user_id = u.id
-            WHERE (s.created_at AT TIME ZONE 'Asia/Taipei')::date = (NOW() AT TIME ZONE 'Asia/Taipei')::date
-            ORDER BY s.id DESC
-        """).fetchall()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        rows = conn.execute("""
-            SELECT s.*, u.username
-            FROM shipping_orders s
-            LEFT JOIN users u ON s.user_id = u.id
-            ORDER BY s.id DESC
-            LIMIT 100
-        """).fetchall()
+    rows = conn.execute("""
+        SELECT s.*, u.username
+        FROM shipping_orders s
+        LEFT JOIN users u ON s.user_id = u.id
+        WHERE date(s.created_at) = date('now','localtime')
+        ORDER BY s.id DESC
+    """).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 @app.get("/api/admin/shippings")
 def admin_shippings(start: Optional[str] = None, end: Optional[str] = None, admin: dict = Depends(require_admin)):
     conn = get_db()
-    try:
-        query = """
-            SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking, s.created_at, u.username
-            FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
-        """
-        params = []
-        if start:
-            query += " AND (s.created_at AT TIME ZONE 'Asia/Taipei')::date >= ?"
-            params.append(start)
-        if end:
-            query += " AND (s.created_at AT TIME ZONE 'Asia/Taipei')::date <= ?"
-            params.append(end)
-        query += " ORDER BY s.id DESC"
-        rows = conn.execute(query, params).fetchall()
-    except Exception as e:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        # 退回不篩日期
-        rows = conn.execute("""
-            SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking, s.created_at, u.username
-            FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id
-            ORDER BY s.id DESC LIMIT 200
-        """).fetchall()
+    query = """
+        SELECT s.order_no, s.pool_name, s.items_json, s.status, s.company, s.tracking, s.packaging_note,
+               s.recipient, s.phone, s.address, s.created_at, u.username
+        FROM shipping_orders s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
+    """
+    params = []
+    if start:
+        query += " AND date(s.created_at) >= ?"
+        params.append(start)
+    if end:
+        query += " AND date(s.created_at) <= ?"
+        params.append(end)
+    query += " ORDER BY s.id DESC"
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     result = []
     for r in rows:
         d = dict(r)
-        raw_items = d.pop("items_json", None) or "[]"
-        try:
-            items = json.loads(raw_items) if isinstance(raw_items, str) else (raw_items or [])
-        except Exception:
-            items = []
-        d["items"] = ", ".join([i.get("name", "") for i in items]) if isinstance(items, list) else "—"
-        dt = d.get("created_at")
-        if dt is None:
-            dt_str = ""
-        elif hasattr(dt, "strftime"):
-            from datetime import timezone, timedelta
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            dt_local = dt.astimezone(timezone(timedelta(hours=8)))
-            dt_str = dt_local.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            dt_str = str(dt)
-        d["created_at"] = dt_str
-        d["fillDate"] = dt_str[:10] if len(dt_str) >= 10 else ""
-        d["fillTime"] = dt_str[11:16] if len(dt_str) >= 16 else ""
+        items = json.loads(d.pop("items_json") or "[]")
+        d["items"] = ", ".join([i.get("name", "") for i in items]) or "—"
+        dt = d["created_at"] or ""
+        d["fillDate"] = dt[:10] if len(dt) >= 10 else ""
+        d["fillTime"] = dt[11:16] if len(dt) >= 16 else ""
         result.append(d)
     return result
 
