@@ -29,8 +29,6 @@ export default function Home() {
         <p className="text-gray-400">選擇你想挑戰的卡池，試試手氣！</p>
       </div>
 
-            )}
-
       {pools.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           目前沒有開放的獎池，請稍後再來或通知管理員新增。
