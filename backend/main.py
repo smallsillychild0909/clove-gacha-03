@@ -37,6 +37,37 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "gacha-images")
 
+# ---------- 寄信設定（忘記密碼驗證碼） ----------
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "noreply@clove.local")
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+
+def send_email(to_email: str, subject: str, body: str) -> bool:
+    """使用 SMTP 寄信。若未設定 SMTP 則只印出內容（開發用）。"""
+    if not SMTP_HOST or not SMTP_USER:
+        print(f"[DEV EMAIL] To: {to_email}\nSubject: {subject}\n{body}")
+        return False  # 表示未真正寄出
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["Subject"] = subject
+        msg["From"] = SMTP_FROM
+        msg["To"] = to_email
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        print(f"寄信失敗: {e}")
+        return False
+
+
 def save_image(file, prefix: str = "img") -> str:
     """儲存上傳圖片。優先壓縮後上傳 Supabase Storage，否則存本機。"""
     from pathlib import Path as _P
@@ -191,6 +222,8 @@ def login(req: LoginRequest):
     conn.close()
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(401, "帳號或密碼錯誤")
+    if user.get("is_active", 1) == 0:
+        raise HTTPException(403, "此帳號已被停用，請聯絡客服")
     token = create_access_token({"sub": user["id"], "role": user["role"]})
     return {
         "token": token,
@@ -202,6 +235,103 @@ def login(req: LoginRequest):
             "points": user["points"]
         }
     }
+
+# ---------- 忘記密碼 ----------
+class ForgotRequest(BaseModel):
+    username: str
+    email: str
+
+class ForgotVerify(BaseModel):
+    username: str
+    code: str
+    new_password: str
+
+@app.post("/api/auth/forgot-password/request")
+def forgot_password_request(req: ForgotRequest):
+    conn = get_db()
+    user = conn.execute(
+        "SELECT id, username, email, is_active FROM users WHERE username = ?",
+        (req.username.strip(),)
+    ).fetchone()
+    if not user or user["email"].lower() != req.email.strip().lower():
+        conn.close()
+        raise HTTPException(400, "帳號與登記 Email 不符")
+    if user.get("is_active", 1) == 0:
+        conn.close()
+        raise HTTPException(403, "此帳號已被停用")
+
+    # 產生 6 碼驗證碼，10 分鐘有效
+    code = f"{random.randint(100000, 999999)}"
+    from datetime import datetime, timedelta, timezone
+    expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+    # 清掉舊的未使用碼
+    conn.execute("DELETE FROM password_reset_codes WHERE user_id = ? AND used = 0", (user["id"],))
+    conn.execute(
+        "INSERT INTO password_reset_codes (user_id, code, expires_at) VALUES (?, ?, ?)",
+        (user["id"], code, expires.isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+    body = f"""您好 {user['username']}，
+
+您正在重設抽卡平台密碼。
+
+驗證碼：{code}
+
+此驗證碼 10 分鐘內有效，請勿告知他人。
+若非您本人操作，請忽略此信。
+
+—— Clove 抽卡平台"""
+    sent = send_email(user["email"], "【Clove 抽卡平台】密碼重設驗證碼", body)
+    msg = "驗證碼已寄至您的 Email" if sent else "驗證碼已產生（開發模式：請查看後端日誌）"
+    return {"success": True, "message": msg}
+
+@app.post("/api/auth/forgot-password/verify")
+def forgot_password_verify(req: ForgotVerify):
+    if len(req.new_password) < 6:
+        raise HTTPException(400, "新密碼至少 6 個字元")
+    conn = get_db()
+    user = conn.execute("SELECT id, username, email FROM users WHERE username = ?", (req.username.strip(),)).fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(400, "帳號不存在")
+
+    from datetime import datetime, timezone
+    row = conn.execute(
+        """SELECT id, code, expires_at, used FROM password_reset_codes
+           WHERE user_id = ? AND used = 0
+           ORDER BY id DESC LIMIT 1""",
+        (user["id"],)
+    ).fetchone()
+    if not row or row["code"] != req.code.strip():
+        conn.close()
+        raise HTTPException(400, "驗證碼錯誤")
+
+    # 檢查過期
+    try:
+        exp = datetime.fromisoformat(str(row["expires_at"]).replace("Z", "+00:00"))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > exp:
+            conn.close()
+            raise HTTPException(400, "驗證碼已過期，請重新申請")
+    except Exception:
+        pass
+
+    # 更新密碼
+    hashed = hash_password(req.new_password)
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashed, user["id"]))
+    conn.execute("UPDATE password_reset_codes SET used = 1 WHERE id = ?", (row["id"],))
+    # 記錄變更
+    conn.execute(
+        "INSERT INTO password_change_logs (user_id, username, email, change_type) VALUES (?, ?, ?, 'self_reset')",
+        (user["id"], user["username"], user["email"])
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": "密碼已更新，請重新登入"}
 
 @app.get("/api/auth/me")
 def me(user: dict = Depends(get_current_user)):
@@ -1000,9 +1130,64 @@ def admin_test_recharge(req: RechargeRequest, admin: dict = Depends(require_admi
 @app.get("/api/admin/users")
 def admin_list_users(admin: dict = Depends(require_admin)):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, username, email, role, points, created_at FROM users ORDER BY id"
-    ).fetchall()
+    rows = conn.execute("""
+        SELECT u.id, u.username, u.email, u.role, u.points, u.created_at,
+               COALESCE(u.is_active, 1) AS is_active,
+               (SELECT COUNT(*) FROM password_change_logs WHERE user_id = u.id) AS password_change_count
+        FROM users u
+        ORDER BY u.id
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+class AdminResetPassword(BaseModel):
+    new_password: str
+
+@app.put("/api/admin/users/{user_id}/toggle-active")
+def admin_toggle_active(user_id: int, admin: dict = Depends(require_admin)):
+    conn = get_db()
+    user = conn.execute("SELECT id, username, is_active, role FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(404, "使用者不存在")
+    if user["role"] == "admin":
+        conn.close()
+        raise HTTPException(400, "不可停用管理員帳號")
+    new_status = 0 if user.get("is_active", 1) == 1 else 1
+    conn.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_status, user_id))
+    conn.commit()
+    conn.close()
+    return {"success": True, "is_active": new_status, "username": user["username"]}
+
+@app.post("/api/admin/users/{user_id}/reset-password")
+def admin_reset_password(user_id: int, req: AdminResetPassword, admin: dict = Depends(require_admin)):
+    if len(req.new_password) < 6:
+        raise HTTPException(400, "新密碼至少 6 個字元")
+    conn = get_db()
+    user = conn.execute("SELECT id, username, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(404, "使用者不存在")
+    hashed = hash_password(req.new_password)
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashed, user_id))
+    conn.execute(
+        "INSERT INTO password_change_logs (user_id, username, email, change_type, operator_id) VALUES (?, ?, ?, 'admin_reset', ?)",
+        (user_id, user["username"], user["email"], admin["id"])
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": f"已重設 {user['username']} 的密碼"}
+
+@app.get("/api/admin/users/{user_id}/password-logs")
+def admin_password_logs(user_id: int, admin: dict = Depends(require_admin)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT id, username, email, change_type, operator_id, changed_at
+        FROM password_change_logs
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT 50
+    """, (user_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1027,15 +1212,25 @@ def admin_transactions(
     return [dict(r) for r in rows]
 
 @app.get("/api/admin/draw-records")
-def admin_draw_records(limit: int = 100, admin: dict = Depends(require_admin)):
+def admin_draw_records(user_id: Optional[int] = None, limit: int = 100, admin: dict = Depends(require_admin)):
     conn = get_db()
-    rows = conn.execute("""
-        SELECT dr.*, u.username, p.name as pool_name
-        FROM draw_records dr
-        LEFT JOIN users u ON dr.user_id = u.id
-        LEFT JOIN pools p ON dr.pool_id = p.id
-        ORDER BY dr.id DESC LIMIT ?
-    """, (limit,)).fetchall()
+    if user_id:
+        rows = conn.execute("""
+            SELECT dr.*, u.username, p.name as pool_name
+            FROM draw_records dr
+            LEFT JOIN users u ON dr.user_id = u.id
+            LEFT JOIN pools p ON dr.pool_id = p.id
+            WHERE dr.user_id = ?
+            ORDER BY dr.id DESC LIMIT ?
+        """, (user_id, limit)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT dr.*, u.username, p.name as pool_name
+            FROM draw_records dr
+            LEFT JOIN users u ON dr.user_id = u.id
+            LEFT JOIN pools p ON dr.pool_id = p.id
+            ORDER BY dr.id DESC LIMIT ?
+        """, (limit,)).fetchall()
     conn.close()
     result = []
     for r in rows:

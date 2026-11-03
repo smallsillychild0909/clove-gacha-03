@@ -136,3 +136,35 @@ CREATE INDEX IF NOT EXISTS idx_redeemed_user ON redeemed_cards(user_id);
 
 -- 若表已存在但缺 sort_order：
 -- ALTER TABLE pools ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+
+-- ============================================================
+-- 會員管理擴充（停用帳號 / 密碼變更紀錄 / 忘記密碼驗證碼）
+-- ============================================================
+
+-- 使用者表增加停用欄位（若尚未存在）
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;
+
+-- 密碼變更紀錄
+CREATE TABLE IF NOT EXISTS password_change_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    username TEXT,
+    email TEXT,
+    change_type TEXT NOT NULL,          -- self_reset / admin_reset
+    operator_id INTEGER,                -- 管理員操作時記錄
+    changed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_logs_user ON password_change_logs(user_id);
+
+-- 忘記密碼驗證碼
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    code TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reset_codes_user ON password_reset_codes(user_id);

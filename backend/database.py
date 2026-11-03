@@ -160,6 +160,7 @@ def init_db():
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'member',
         points INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now','localtime'))
     )
     """)
@@ -223,6 +224,39 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
     """)
+
+    # 密碼變更紀錄
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS password_change_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT,
+        email TEXT,
+        change_type TEXT NOT NULL,
+        operator_id INTEGER,
+        changed_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    """)
+
+    # 忘記密碼驗證碼
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS password_reset_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        code TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    """)
+
+    # 若舊表沒有 is_active 則補上
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    except Exception:
+        pass
 
     conn.commit()
     _seed_default_users(conn)
