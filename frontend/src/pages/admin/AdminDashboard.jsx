@@ -4,6 +4,7 @@ export default function AdminDashboard() {
   const cards = [
     { to: "/admin/pools", title: "獎池管理", desc: "新增 / 編輯活動卡池", icon: "🎴" },
     { to: "/admin/members", title: "會員管理", desc: "查看會員、調整點數、紀錄", icon: "👥" },
+    { to: "/admin/tiers", title: "會員等級", desc: "設定 VIP1~VIP5 / VVIP / SVIP 門檻與折扣", icon: "👑" },
     { to: "/admin/recharge", title: "儲值管理", desc: "手動儲值 & 系統測試儲值", icon: "💰" },
     { to: "/admin/records", title: "消費與抽卡紀錄", desc: "查看所有會員紀錄", icon: "📋" },
     { to: "/admin/shipping", title: "出貨管理", desc: "今日出貨與總覽報表", icon: "📦" },

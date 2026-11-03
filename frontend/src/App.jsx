@@ -16,6 +16,7 @@ import AdminRecords from "./pages/admin/AdminRecords";
 import AdminShipping from "./pages/admin/AdminShipping";
 import AdminCardReturn from "./pages/admin/AdminCardReturn";
 import AdminMembers from "./pages/admin/AdminMembers";
+import AdminTiers from "./pages/admin/AdminTiers";
 
 function Protected({ children, role }) {
     const { user, loading } = useAuth();
@@ -47,6 +48,7 @@ export default function App() {
                     <Route path="/admin/shipping" element={<Protected role="admin"><AdminShipping /></Protected>} />
                     <Route path="/admin/card-return" element={<Protected role="admin"><AdminCardReturn /></Protected>} />
                     <Route path="/admin/members" element={<Protected role="admin"><AdminMembers /></Protected>} />
+                    <Route path="/admin/tiers" element={<Protected role="admin"><AdminTiers /></Protected>} />
 
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

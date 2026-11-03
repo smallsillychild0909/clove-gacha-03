@@ -2,6 +2,22 @@ import { imgSrc } from "../utils/image";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 
+// 依等級回傳顏色樣式
+function getLevelStyle(level) {
+  const map = {
+    "普通會員": { bg: "from-gray-500 to-gray-600", text: "text-white", border: "border-gray-400", glow: "shadow-gray-500/40" },
+    "VIP1":     { bg: "from-blue-400 to-cyan-400", text: "text-white", border: "border-blue-200", glow: "shadow-blue-400/60" },
+    "VIP2":     { bg: "from-cyan-400 to-teal-400", text: "text-black", border: "border-cyan-200", glow: "shadow-cyan-400/60" },
+    "VIP3":     { bg: "from-green-400 to-emerald-400", text: "text-black", border: "border-green-200", glow: "shadow-green-400/60" },
+    "VIP4":     { bg: "from-purple-400 to-fuchsia-400", text: "text-white", border: "border-purple-200", glow: "shadow-purple-400/60" },
+    "VIP5":     { bg: "from-pink-400 to-rose-400", text: "text-white", border: "border-pink-200", glow: "shadow-pink-400/60" },
+    "VVIP":     { bg: "from-amber-400 to-yellow-400", text: "text-black", border: "border-amber-200", glow: "shadow-amber-400/70" },
+    "SVIP":     { bg: "from-yellow-300 via-amber-200 to-yellow-400", text: "text-black", border: "border-yellow-100", glow: "shadow-yellow-400/80" },
+  };
+  return map[level] || map["普通會員"];
+}
+
+
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 export default function MyRecords() {
@@ -15,20 +31,23 @@ export default function MyRecords() {
   const [showExtractModal, setShowExtractModal] = useState(false);
   const [extractForm, setExtractForm] = useState({ address: "", recipient: "", phone: "", shippingMethod: "cod" });
   const [submitting, setSubmitting] = useState(false);
+  const [tierInfo, setTierInfo] = useState(null);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [d, t, s, keys] = await Promise.all([
+      const [d, t, s, keys, tier] = await Promise.all([
         api.myDrawRecords(),
         api.myTransactions(),
         api.myShippings(),
         api.myRedeemedKeys(),
+        api.myTierInfo().catch(() => null),
       ]);
       setDraws(d);
       setTxs(t);
       setShippings(s);
       setRedeemedKeys(new Set(keys || []));
+      setTierInfo(tier);
     } catch (e) {
       console.error(e);
     } finally {
@@ -99,6 +118,47 @@ export default function MyRecords() {
 
   return (
     <div>
+      {tierInfo && (
+        <div className="mb-8 p-7 rounded-3xl bg-gradient-to-br from-yellow-900/80 via-amber-700/60 to-orange-900/70 border-4 border-yellow-300/80 shadow-[0_0_50px_rgba(250,204,21,0.5)] relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400/10 to-transparent animate-pulse pointer-events-none" />
+          <div className="relative flex flex-wrap items-center gap-5">
+            <span className="text-sm text-yellow-200 tracking-widest">會員等級</span>
+            {(() => {
+              const s = getLevelStyle(tierInfo.member_level);
+              return (
+                <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-full bg-gradient-to-r ${s.bg} ${s.text} font-black text-3xl shadow-2xl ${s.glow} border-2 ${s.border}`}>
+                  👑 {tierInfo.member_level}
+                </span>
+              );
+            })()}
+            <span className="text-base text-yellow-100">
+              累計儲值 <span className="font-black text-amber-200 text-xl">{tierInfo.total_recharged?.toLocaleString() || 0}</span>
+            </span>
+            {tierInfo.draw_discount > 0 && (
+              <span className="text-base text-green-300 font-semibold">抽卡 {100 - tierInfo.draw_discount} 折</span>
+            )}
+          </div>
+          {tierInfo.next_tier && (
+            <div className="relative mt-4">
+              <div className="text-lg text-yellow-50 mb-2">
+                再儲值 <span className="text-3xl font-black text-amber-200">{tierInfo.next_tier.remaining.toLocaleString()}</span> 可升級至{" "}
+                <span className="font-black text-yellow-200">{tierInfo.next_tier.name}</span>
+              </div>
+              <div className="w-full bg-black/40 rounded-full h-3 overflow-hidden border border-yellow-500/50">
+                <div
+                  className="h-full bg-gradient-to-r from-yellow-400 to-amber-300 rounded-full"
+                  style={{
+                    width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {!tierInfo.next_tier && (
+            <div className="relative mt-4 text-lg text-green-300 font-bold">已達最高等級</div>
+          )}
+        </div>
+      )}
       <h1 className="text-2xl font-bold text-pink-300 mb-6">我的功能</h1>
       <div className="flex flex-wrap gap-2 mb-6">
         <button onClick={() => setTab("draw")} className={`px-4 py-2 rounded-lg ${tab === "draw" ? "bg-pink-600" : "bg-dark-800"}`}>抽卡紀錄</button>

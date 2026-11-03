@@ -204,6 +204,7 @@ export default function AdminMembers() {
               <thead className="bg-dark-900/80 text-gray-400">
                 <tr>
                   <th className="px-4 py-3 text-left">帳號</th>
+                  <th className="px-4 py-3 text-left">等級</th>
                   <th className="px-4 py-3 text-left">Email</th>
                   <th className="px-4 py-3 text-left">狀態</th>
                   <th className="px-4 py-3 text-left">申請日期 (UTC+8)</th>
@@ -215,7 +216,7 @@ export default function AdminMembers() {
               <tbody>
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                       沒有符合的會員
                     </td>
                   </tr>
@@ -223,6 +224,16 @@ export default function AdminMembers() {
                   filteredMembers.map((u) => (
                     <tr key={u.id} className="border-t border-gray-800 hover:bg-purple-900/20 transition">
                       <td className="px-4 py-3 font-medium text-gray-200">{u.username}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 text-xs rounded font-semibold ${
+                          u.member_level && u.member_level !== "普通會員"
+                            ? "bg-yellow-500/20 text-yellow-300"
+                            : "bg-gray-700 text-gray-400"
+                        }`}>
+                          {u.member_level || "普通會員"}
+                        </span>
+                        <div className="text-xs text-gray-500 mt-0.5">累計 { (u.total_recharged||0).toLocaleString() }</div>
+                      </td>
                       <td className="px-4 py-3 text-gray-400">{u.email || "—"}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs ${u.is_active ? "bg-green-900/50 text-green-300" : "bg-red-900/50 text-red-300"}`}>
@@ -261,8 +272,10 @@ export default function AdminMembers() {
               <div>
                 <h3 className="text-xl font-bold text-purple-300">會員詳情</h3>
                 <p className="text-sm text-gray-400 mt-1">
-                  {detailUser.username} · {detailUser.email || "無 Email"} · 目前點數{" "}
+                  {detailUser.username} · {detailUser.email || "無 Email"} ·{" "}
+                  <span className="text-yellow-300">{detailUser.member_level || "普通會員"}</span> · 目前點數{" "}
                   <span className="text-green-300">{detailUser.points.toLocaleString()} pt</span>
+                  <span className="text-gray-500 text-xs ml-2">（累計儲值 {(detailUser.total_recharged||0).toLocaleString()}）</span>
                 </p>
               </div>
               <button

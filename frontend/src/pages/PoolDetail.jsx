@@ -84,6 +84,7 @@ export default function PoolDetail() {
     const [animPhase, setAnimPhase] = useState("idle");
     const [lightbox, setLightbox] = useState(null);
     const [bestRarity, setBestRarity] = useState(null);
+    const [tierInfo, setTierInfo] = useState(null);
 
     const load = () => {
         api.getPool(id)
@@ -93,6 +94,12 @@ export default function PoolDetail() {
     };
 
     useEffect(() => { load(); }, [id]);
+
+    useEffect(() => {
+        if (user) {
+            api.myTierInfo().then(setTierInfo).catch(() => {});
+        }
+    }, [user]);
 
     useEffect(() => {
         if (!results || animPhase !== "spinning") return;
@@ -324,7 +331,7 @@ export default function PoolDetail() {
                                         disabled={drawing || (pool?.remaining_quantity ?? 0) < 10}
                                         className="px-8 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 font-medium"
                                     >
-                                        再十連抽 {pool?.cost_ten ?? ""} pt
+                                        再十連抽 {tierInfo?.draw_discount > 0 ? Math.max(0, Math.floor((pool?.cost_ten||0) * (100 - tierInfo.draw_discount) / 100)) : (pool?.cost_ten ?? "")} pt
                                     </button>
                                     <button
                                         onClick={closeAnimation}
@@ -374,20 +381,33 @@ export default function PoolDetail() {
                     {error && <div className="bg-red-900/40 text-red-300 px-3 py-2 rounded text-sm mb-4">{error}</div>}
 
                     <div className="flex gap-3">
-                        <button
-                            onClick={() => handleDraw("single")}
-                            disabled={drawing || pool.remaining_quantity < 1}
-                            className="flex-1 py-3 rounded-xl bg-pink-600 hover:bg-pink-500 disabled:opacity-40 font-medium transition"
-                        >
-                            {drawing ? "抽卡中..." : `單抽 ${pool.cost_single} pt`}
-                        </button>
-                        <button
-                            onClick={() => handleDraw("ten")}
-                            disabled={drawing || pool.remaining_quantity < 10}
-                            className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 font-medium transition"
-                        >
-                            {drawing ? "抽卡中..." : `十連 ${pool.cost_ten} pt`}
-                        </button>
+                        {(() => {
+                            const disc = tierInfo?.draw_discount || 0;
+                            const single = disc > 0 ? Math.max(0, Math.floor(pool.cost_single * (100 - disc) / 100)) : pool.cost_single;
+                            const ten = disc > 0 ? Math.max(0, Math.floor(pool.cost_ten * (100 - disc) / 100)) : pool.cost_ten;
+                            return (
+                                <>
+                                    <button
+                                        onClick={() => handleDraw("single")}
+                                        disabled={drawing || pool.remaining_quantity < 1}
+                                        className="flex-1 py-3 rounded-xl bg-pink-600 hover:bg-pink-500 disabled:opacity-40 font-medium transition"
+                                    >
+                                        {drawing ? "抽卡中..." : (
+                                            <>單抽 {single} pt{disc > 0 && <span className="text-xs ml-1 opacity-80">(原 {pool.cost_single})</span>}</>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => handleDraw("ten")}
+                                        disabled={drawing || pool.remaining_quantity < 10}
+                                        className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 font-medium transition"
+                                    >
+                                        {drawing ? "抽卡中..." : (
+                                            <>十連 {ten} pt{disc > 0 && <span className="text-xs ml-1 opacity-80">(原 {pool.cost_ten})</span>}</>
+                                        )}
+                                    </button>
+                                </>
+                            );
+                        })()}
                     </div>
 
                     {!user && (

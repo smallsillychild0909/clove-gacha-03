@@ -116,4 +116,14 @@ export const api = {
   forgotPasswordVerify: (body) => request("/api/auth/forgot-password/verify", { method: "POST", body: JSON.stringify(body) }),
 };
 
+
+  // 會員等級
+  adminListTiers: () => request("/api/admin/member-tiers"),
+  adminCreateTier: (body) => request("/api/admin/member-tiers", { method: "POST", body: JSON.stringify(body) }),
+  adminUpdateTier: (id, body) => request(`/api/admin/member-tiers/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  adminDeleteTier: (id) => request(`/api/admin/member-tiers/${id}`, { method: "DELETE" }),
+  adminRecalculateTiers: () => request("/api/admin/member-tiers/recalculate-all", { method: "POST" }),
+
+  myTierInfo: () => request("/api/my/tier-info"),
+
 export default api;
