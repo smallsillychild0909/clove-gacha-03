@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 export default function AdminDashboard() {
   const cards = [
     { to: "/admin/pools", title: "獎池管理", desc: "新增 / 編輯活動卡池", icon: "🎴" },
+    { to: "/admin/members", title: "會員管理", desc: "查看會員、調整點數、紀錄", icon: "👥" },
     { to: "/admin/recharge", title: "儲值管理", desc: "手動儲值 & 系統測試儲值", icon: "💰" },
     { to: "/admin/records", title: "消費與抽卡紀錄", desc: "查看所有會員紀錄", icon: "📋" },
     { to: "/admin/shipping", title: "出貨管理", desc: "今日出貨與總覽報表", icon: "📦" },
@@ -12,7 +13,7 @@ export default function AdminDashboard() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-purple-300 mb-6">管理控台</h1>
-      <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-6">
+      <div className="grid sm:grid-cols-3 lg:grid-cols-6 gap-6">
         {cards.map((c) => (
           <Link key={c.to} to={c.to}
             className="bg-dark-800/60 rounded-2xl p-6 border border-purple-900/30 hover:border-purple-500/50 transition group">

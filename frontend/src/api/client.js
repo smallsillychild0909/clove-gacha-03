@@ -90,7 +90,7 @@ export const api = {
   adminTestRecharge: (body) => request("/api/admin/test-recharge", { method: "POST", body: JSON.stringify(body) }),
   adminUsers: () => request("/api/admin/users"),
   adminTransactions: (userId) => request(userId ? `/api/admin/transactions?user_id=${userId}` : "/api/admin/transactions"),
-  adminDrawRecords: () => request("/api/admin/draw-records"),
+  adminDrawRecords: (userId) => request(userId ? `/api/admin/draw-records?user_id=${userId}` : "/api/admin/draw-records"),
   adminShippingsToday: () => request("/api/admin/shippings/today"),
   adminShippings: (params = {}) => {
     const q = new URLSearchParams(params).toString();
@@ -105,6 +105,15 @@ export const api = {
   adminDeletePool: (poolId) => request(`/api/admin/pools/${poolId}`, { method: "DELETE" }),
   adminMovePool: (poolId, direction) =>
     request(`/api/admin/pools/${poolId}/move?direction=${direction}`, { method: "POST" }),
+
+  // 會員管理
+  adminToggleActive: (userId) => request(`/api/admin/users/${userId}/toggle-active`, { method: "PUT" }),
+  adminResetPassword: (userId, body) => request(`/api/admin/users/${userId}/reset-password`, { method: "POST", body: JSON.stringify(body) }),
+  adminPasswordLogs: (userId) => request(`/api/admin/users/${userId}/password-logs`),
+
+  // 忘記密碼
+  forgotPasswordRequest: (body) => request("/api/auth/forgot-password/request", { method: "POST", body: JSON.stringify(body) }),
+  forgotPasswordVerify: (body) => request("/api/auth/forgot-password/verify", { method: "POST", body: JSON.stringify(body) }),
 };
 
 export default api;
