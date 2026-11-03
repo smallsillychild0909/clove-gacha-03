@@ -119,44 +119,70 @@ export default function MyRecords() {
   return (
     <div>
       {tierInfo && (
-        <div className="mb-8 p-7 rounded-3xl bg-gradient-to-br from-yellow-900/80 via-amber-700/60 to-orange-900/70 border-4 border-yellow-300/80 shadow-[0_0_50px_rgba(250,204,21,0.5)] relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400/10 to-transparent animate-pulse pointer-events-none" />
-          <div className="relative flex flex-wrap items-center gap-5">
-            <span className="text-sm text-yellow-200 tracking-widest">會員等級</span>
-            {(() => {
-              const s = getLevelStyle(tierInfo.member_level);
-              return (
-                <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-full bg-gradient-to-r ${s.bg} ${s.text} font-black text-3xl shadow-2xl ${s.glow} border-2 ${s.border}`}>
-                  👑 {tierInfo.member_level}
-                </span>
-              );
-            })()}
-            <span className="text-base text-yellow-100">
-              累計儲值 <span className="font-black text-amber-200 text-xl">{tierInfo.total_recharged?.toLocaleString() || 0}</span>
-            </span>
-            {tierInfo.draw_discount > 0 && (
-              <span className="text-base text-green-300 font-semibold">抽卡 {100 - tierInfo.draw_discount} 折</span>
-            )}
-          </div>
-          {tierInfo.next_tier && (
-            <div className="relative mt-4">
-              <div className="text-lg text-yellow-50 mb-2">
-                再儲值 <span className="text-3xl font-black text-amber-200">{tierInfo.next_tier.remaining.toLocaleString()}</span> 可升級至{" "}
-                <span className="font-black text-yellow-200">{tierInfo.next_tier.name}</span>
-              </div>
-              <div className="w-full bg-black/40 rounded-full h-3 overflow-hidden border border-yellow-500/50">
-                <div
-                  className="h-full bg-gradient-to-r from-yellow-400 to-amber-300 rounded-full"
-                  style={{
-                    width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
-                  }}
-                />
+        <div className="mb-8 mx-auto max-w-xl relative group">
+          {/* 外層光暈 */}
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500/40 via-amber-400/30 to-orange-500/40 rounded-3xl blur-sm opacity-70 group-hover:opacity-100 transition duration-500" />
+          
+          <div className="relative p-6 rounded-3xl bg-dark-900/80 backdrop-blur-xl border border-white/10 overflow-hidden">
+            {/* 背景光斑 */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+
+            <div className="relative text-center">
+              <div className="text-[11px] text-gray-500 tracking-[0.25em] uppercase mb-3">Member Tier</div>
+              
+              {(() => {
+                const s = getLevelStyle(tierInfo.member_level);
+                return (
+                  <div className={`inline-flex items-center gap-2 px-6 py-2 rounded-full bg-gradient-to-r ${s.bg} ${s.text} font-black text-2xl shadow-lg ${s.glow} border border-white/20`}>
+                    <span className="text-lg">👑</span>
+                    {tierInfo.member_level}
+                  </div>
+                );
+              })()}
+
+              <div className="mt-5 flex justify-center divide-x divide-white/10">
+                <div className="px-5">
+                  <div className="text-[11px] text-gray-500">累計儲值</div>
+                  <div className="text-lg font-semibold text-amber-300 tabular-nums">{tierInfo.total_recharged?.toLocaleString() || 0}</div>
+                </div>
+                {tierInfo.draw_discount > 0 && (
+                  <div className="px-5">
+                    <div className="text-[11px] text-gray-500">抽卡優惠</div>
+                    <div className="text-lg font-semibold text-green-400">{100 - tierInfo.draw_discount} 折</div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-          {!tierInfo.next_tier && (
-            <div className="relative mt-4 text-lg text-green-300 font-bold">已達最高等級</div>
-          )}
+
+            {tierInfo.next_tier && (
+              <div className="relative mt-6">
+                <div className="flex justify-between text-xs text-gray-400 mb-2">
+                  <span>距離 {tierInfo.next_tier.name}</span>
+                  <span className="text-amber-300 font-medium">還差 {tierInfo.next_tier.remaining.toLocaleString()}</span>
+                </div>
+                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-all duration-700"
+                    style={{
+                      width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+                  <span>{tierInfo.total_recharged?.toLocaleString() || 0}</span>
+                  <span>{tierInfo.next_tier.min_recharge.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+            {!tierInfo.next_tier && (
+              <div className="relative mt-5 text-center">
+                <span className="inline-flex items-center gap-1 text-sm text-green-400">
+                  <span>✦</span> 已達最高等級
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
       <h1 className="text-2xl font-bold text-pink-300 mb-6">我的功能</h1>
