@@ -119,29 +119,93 @@ export default function MyRecords() {
   return (
     <div>
       {tierInfo && (
-        <div className="mb-8 mx-auto max-w-xl relative group">
-          {/* 外層光暈 */}
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500/40 via-amber-400/30 to-orange-500/40 rounded-3xl blur-sm opacity-70 group-hover:opacity-100 transition duration-500" />
-          
-          <div className="relative p-6 rounded-3xl bg-dark-900/80 backdrop-blur-xl border border-white/10 overflow-hidden">
-            {/* 背景光斑 */}
-            <div className="absolute top-0 right-0 w-40 h-40 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-
-            <div className="relative text-center">
-              <div className="text-[11px] text-gray-500 tracking-[0.25em] uppercase mb-3">Member Tier</div>
-              
+        <div className="mb-8 mx-auto max-w-lg">
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-dark-800/90 to-dark-900 border border-white/10 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-pink-400/50 to-transparent" />
+            <div className="flex items-center gap-4">
               {(() => {
                 const s = getLevelStyle(tierInfo.member_level);
                 return (
-                  <div className={`inline-flex items-center gap-2 px-6 py-2 rounded-full bg-gradient-to-r ${s.bg} ${s.text} font-black text-2xl shadow-lg ${s.glow} border border-white/20`}>
-                    <span className="text-lg">👑</span>
-                    {tierInfo.member_level}
+                  <div className={`flex-shrink-0 w-[72px] h-[72px] rounded-2xl bg-gradient-to-br ${s.bg} ${s.text} flex flex-col items-center justify-center shadow-lg ${s.glow} relative`}>
+                    <span className="text-sm">👑</span>
+                    <span className="font-extrabold text-base tracking-wide">{tierInfo.member_level}</span>
+                    <div className="absolute inset-px rounded-2xl border border-white/20 pointer-events-none" />
                   </div>
                 );
               })()}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <div>
+                    <div className="text-[11px] text-gray-500">累計儲值</div>
+                    <div className="text-[22px] font-bold text-white tabular-nums leading-tight">{tierInfo.total_recharged?.toLocaleString() || 0}</div>
+                  </div>
+                  {tierInfo.draw_discount > 0 && (
+                    <div className="px-2 py-0.5 rounded-md bg-green-500/15 text-green-400 text-xs font-semibold">
+                      {100 - tierInfo.draw_discount} 折
+                    </div>
+                  )}
+                </div>
+                {tierInfo.next_tier && (
+                  <>
+                    <div className="flex justify-between text-[11px] text-gray-400 mb-1.5">
+                      <span>→ {tierInfo.next_tier.name}</span>
+                      <span className="text-pink-300">還差 {tierInfo.next_tier.remaining.toLocaleString()}</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full"
+                        style={{
+                          width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+                {!tierInfo.next_tier && (
+                  <div className="text-xs text-green-400">已達最高等級</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}{/* 資訊 */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-3">
+                  <div>
+                    <div className="text-[10px] text-gray-500">累計儲值</div>
+                    <div className="text-xl font-bold text-white tabular-nums">{tierInfo.total_recharged?.toLocaleString() || 0}</div>
+                  </div>
+                  {tierInfo.draw_discount > 0 && (
+                    <div className="px-2 py-0.5 rounded-md bg-green-500/15 text-green-400 text-xs font-medium">
+                      {100 - tierInfo.draw_discount} 折
+                    </div>
+                  )}
+                </div>
 
-              <div className="mt-5 flex justify-center divide-x divide-white/10">
+                {tierInfo.next_tier && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+                      <span>→ {tierInfo.next_tier.name}</span>
+                      <span className="text-pink-300">還差 {tierInfo.next_tier.remaining.toLocaleString()}</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full"
+                        style={{
+                          width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {!tierInfo.next_tier && (
+                  <div className="mt-2 text-xs text-green-400">已達最高等級</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}<div className="mt-5 flex justify-center divide-x divide-white/10">
                 <div className="px-5">
                   <div className="text-[11px] text-gray-500">累計儲值</div>
                   <div className="text-lg font-semibold text-amber-300 tabular-nums">{tierInfo.total_recharged?.toLocaleString() || 0}</div>
