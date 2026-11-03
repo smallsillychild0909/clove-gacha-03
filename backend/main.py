@@ -38,34 +38,79 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "gacha-images")
 
 # ---------- 寄信設定（忘記密碼驗證碼） ----------
+# 優先使用 Gmail API（HTTPS，適合 Render 等封鎖 SMTP 的平台）
+GMAIL_CLIENT_ID = os.getenv("GMAIL_CLIENT_ID", "")
+GMAIL_CLIENT_SECRET = os.getenv("GMAIL_CLIENT_SECRET", "")
+GMAIL_REFRESH_TOKEN = os.getenv("GMAIL_REFRESH_TOKEN", "")
+GMAIL_USER = os.getenv("GMAIL_USER", "")  # 寄件者 Gmail
+
+# 傳統 SMTP（備援）
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "noreply@clove.local")
+SMTP_FROM = os.getenv("SMTP_FROM", GMAIL_USER or SMTP_USER or "noreply@clove.local")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
 
-def send_email(to_email: str, subject: str, body: str) -> bool:
-    """使用 SMTP 寄信。若未設定 SMTP 則只印出內容（開發用）。"""
-    if not SMTP_HOST or not SMTP_USER:
-        print(f"[DEV EMAIL] To: {to_email}\nSubject: {subject}\n{body}")
-        return False  # 表示未真正寄出
+def _send_via_gmail_api(to_email: str, subject: str, body: str) -> bool:
+    """使用 Gmail API 寄信（需要 OAuth refresh token）。"""
     try:
-        import smtplib
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
         from email.mime.text import MIMEText
+        import base64
+
+        creds = Credentials(
+            token=None,
+            refresh_token=GMAIL_REFRESH_TOKEN,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=GMAIL_CLIENT_ID,
+            client_secret=GMAIL_CLIENT_SECRET,
+            scopes=["https://www.googleapis.com/auth/gmail.send"],
+        )
+        service = build("gmail", "v1", credentials=creds)
         msg = MIMEText(body, "plain", "utf-8")
-        msg["Subject"] = subject
-        msg["From"] = SMTP_FROM
-        msg["To"] = to_email
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            if SMTP_USE_TLS:
-                server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+        msg["to"] = to_email
+        msg["from"] = GMAIL_USER or SMTP_FROM
+        msg["subject"] = subject
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        service.users().messages().send(userId="me", body={"raw": raw}).execute()
         return True
     except Exception as e:
-        print(f"寄信失敗: {e}")
+        print(f"Gmail API 寄信失敗: {e}")
         return False
+
+def send_email(to_email: str, subject: str, body: str) -> bool:
+    """寄信。優先 Gmail API，其次 SMTP，都沒設定則只印日誌。"""
+    # 1. Gmail API
+    if GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN:
+        ok = _send_via_gmail_api(to_email, subject, body)
+        if ok:
+            return True
+        # 失敗則繼續嘗試 SMTP
+
+    # 2. SMTP
+    if SMTP_HOST and SMTP_USER:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            msg = MIMEText(body, "plain", "utf-8")
+            msg["Subject"] = subject
+            msg["From"] = SMTP_FROM
+            msg["To"] = to_email
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                if SMTP_USE_TLS:
+                    server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+            return True
+        except Exception as e:
+            print(f"SMTP 寄信失敗: {e}")
+            return False
+
+    # 3. 開發模式
+    print(f"[DEV EMAIL] To: {to_email}\nSubject: {subject}\n{body}")
+    return False
 
 
 def save_image(file, prefix: str = "img") -> str:
