@@ -168,43 +168,6 @@ export default function MyRecords() {
             </div>
           </div>
         </div>
-      )}{/* 資訊 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-3">
-                  <div>
-                    <div className="text-[10px] text-gray-500">累計儲值</div>
-                    <div className="text-xl font-bold text-white tabular-nums">{tierInfo.total_recharged?.toLocaleString() || 0}</div>
-                  </div>
-                  {tierInfo.draw_discount > 0 && (
-                    <div className="px-2 py-0.5 rounded-md bg-green-500/15 text-green-400 text-xs font-medium">
-                      {100 - tierInfo.draw_discount} 折
-                    </div>
-                  )}
-                </div>
-
-                {tierInfo.next_tier && (
-                  <div className="mt-2">
-                    <div className="flex justify-between text-[11px] text-gray-400 mb-1">
-                      <span>→ {tierInfo.next_tier.name}</span>
-                      <span className="text-pink-300">還差 {tierInfo.next_tier.remaining.toLocaleString()}</span>
-                    </div>
-                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-pink-500 to-purple-400 rounded-full"
-                        style={{
-                          width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {!tierInfo.next_tier && (
-                  <div className="mt-2 text-xs text-green-400">已達最高等級</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       <h1 className="text-2xl font-bold text-pink-300 mb-6">我的功能</h1>
