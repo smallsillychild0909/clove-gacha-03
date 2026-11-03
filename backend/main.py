@@ -52,6 +52,33 @@ SMTP_PASS = os.getenv("SMTP_PASS", "")
 SMTP_FROM = os.getenv("SMTP_FROM", GMAIL_USER or SMTP_USER or "noreply@clove.local")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
 
+# ---------- 會員等級計算 ----------
+def recalculate_member_level(conn, user_id: int):
+    """依累計儲值金額重新計算並更新會員等級。回傳 (level, total)"""
+    row = conn.execute("""
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM transactions
+        WHERE user_id = ? AND amount > 0
+          AND type IN ('recharge', 'admin_recharge', 'payment', 'test_recharge')
+    """, (user_id,)).fetchone()
+    total = int(row["total"] or 0) if row else 0
+
+    tier = conn.execute("""
+        SELECT name FROM member_tiers
+        WHERE min_recharge <= ?
+        ORDER BY min_recharge DESC
+        LIMIT 1
+    """, (total,)).fetchone()
+    level = tier["name"] if tier else "普通會員"
+
+    conn.execute(
+        "UPDATE users SET total_recharged = ?, member_level = ? WHERE id = ?",
+        (total, level, user_id)
+    )
+    return level, total
+
+
+
 def _send_via_gmail_api(to_email: str, subject: str, body: str) -> bool:
     """使用 Gmail API 寄信（需要 OAuth refresh token）。"""
     try:
@@ -385,8 +412,50 @@ def me(user: dict = Depends(get_current_user)):
         "username": user["username"],
         "email": user["email"],
         "role": user["role"],
-        "points": user["points"]
+        "points": user["points"],
+        "member_level": user.get("member_level", "普通會員"),
+        "total_recharged": user.get("total_recharged", 0)
     }
+
+
+@app.get("/api/my/tier-info")
+def my_tier_info(user: dict = Depends(require_member)):
+    """回傳目前等級、折扣、距離下一級還差多少"""
+    conn = get_db()
+    total = int(user.get("total_recharged") or 0)
+    level = user.get("member_level") or "普通會員"
+
+    # 目前等級的折扣
+    cur = conn.execute(
+        "SELECT draw_discount FROM member_tiers WHERE name = ?", (level,)
+    ).fetchone()
+    discount = int(cur["draw_discount"] or 0) if cur else 0
+
+    # 下一級（min_recharge 大於目前累計的最低那一階）
+    next_tier = conn.execute(
+        """SELECT name, min_recharge, draw_discount
+           FROM member_tiers
+           WHERE min_recharge > ?
+           ORDER BY min_recharge ASC
+           LIMIT 1""",
+        (total,)
+    ).fetchone()
+
+    result = {
+        "member_level": level,
+        "draw_discount": discount,
+        "total_recharged": total,
+        "next_tier": None
+    }
+    if next_tier:
+        result["next_tier"] = {
+            "name": next_tier["name"],
+            "min_recharge": next_tier["min_recharge"],
+            "draw_discount": next_tier["draw_discount"],
+            "remaining": next_tier["min_recharge"] - total
+        }
+    conn.close()
+    return result
 
 # ==================== 獎池 (公開 + 會員) ====================
 
@@ -447,8 +516,18 @@ def draw_cards(req: DrawRequest, user: dict = Depends(require_member)):
         if not pool:
             raise HTTPException(404, "獎池不存在或已關閉")
 
-        cost = pool["cost_single"] if req.draw_type == "single" else pool["cost_ten"]
+        base_cost = pool["cost_single"] if req.draw_type == "single" else pool["cost_ten"]
         count = 1 if req.draw_type == "single" else 10
+
+        # 套用會員等級抽卡折扣
+        discount = 0
+        tier_row = conn.execute(
+            "SELECT draw_discount FROM member_tiers WHERE name = ?",
+            (user.get("member_level", "普通會員"),)
+        ).fetchone()
+        if tier_row:
+            discount = int(tier_row["draw_discount"] or 0)
+        cost = max(0, int(base_cost * (100 - discount) / 100))
 
         if user["points"] < cost:
             raise HTTPException(400, f"點數不足，需要 {cost} 點，目前只有 {user['points']} 點")
@@ -570,9 +649,10 @@ def member_recharge(req: RechargeRequest, user: dict = Depends(require_member)):
         "INSERT INTO transactions (user_id, type, amount, balance_after, note) VALUES (?, 'recharge', ?, ?, ?)",
         (user["id"], req.amount, new_points, req.note or "會員自行儲值（模擬）")
     )
+    level, total = recalculate_member_level(conn, user["id"])
     conn.commit()
     conn.close()
-    return {"success": True, "new_points": new_points}
+    return {"success": True, "new_points": new_points, "member_level": level, "total_recharged": total}
 
 
 # ==================== 第三方支付（Stripe：刷卡 / Apple Pay / Google Pay / 微信 / 支付寶） ====================
@@ -627,6 +707,7 @@ def _credit_order(conn, order: dict, payment_id: str | None = None) -> int:
         (user["id"], order["amount_points"], new_points,
          f"{label} 儲值 {order['amount_money']} {order['currency']} · 訂單 {order['order_no']}")
     )
+    recalculate_member_level(conn, user["id"])
     return new_points
 
 
@@ -1144,9 +1225,15 @@ def admin_recharge(req: RechargeRequest, admin: dict = Depends(require_admin)):
         "INSERT INTO transactions (user_id, type, amount, balance_after, note, operator_id) VALUES (?, ?, ?, ?, ?, ?)",
         (req.user_id, tx_type, req.amount, new_points, req.note or "管理員手動操作", admin["id"])
     )
+    # 只有加點才重新計算等級
+    if req.amount > 0:
+        level, total = recalculate_member_level(conn, req.user_id)
+    else:
+        level = target.get("member_level", "普通會員")
+        total = target.get("total_recharged", 0)
     conn.commit()
     conn.close()
-    return {"success": True, "new_points": new_points}
+    return {"success": True, "new_points": new_points, "member_level": level, "total_recharged": total}
 
 @app.post("/api/admin/test-recharge")
 def admin_test_recharge(req: RechargeRequest, admin: dict = Depends(require_admin)):
@@ -1168,9 +1255,10 @@ def admin_test_recharge(req: RechargeRequest, admin: dict = Depends(require_admi
         "INSERT INTO transactions (user_id, type, amount, balance_after, note, operator_id) VALUES (?, 'test_recharge', ?, ?, ?, ?)",
         (req.user_id, req.amount, new_points, req.note or "系統測試儲值", admin["id"])
     )
+    level, total = recalculate_member_level(conn, req.user_id)
     conn.commit()
     conn.close()
-    return {"success": True, "new_points": new_points}
+    return {"success": True, "new_points": new_points, "member_level": level, "total_recharged": total}
 
 @app.get("/api/admin/users")
 def admin_list_users(admin: dict = Depends(require_admin)):
@@ -1178,6 +1266,8 @@ def admin_list_users(admin: dict = Depends(require_admin)):
     rows = conn.execute("""
         SELECT u.id, u.username, u.email, u.role, u.points, u.created_at,
                COALESCE(u.is_active, 1) AS is_active,
+               COALESCE(u.member_level, '普通會員') AS member_level,
+               COALESCE(u.total_recharged, 0) AS total_recharged,
                (SELECT COUNT(*) FROM password_change_logs WHERE user_id = u.id) AS password_change_count
         FROM users u
         ORDER BY u.id
@@ -1588,3 +1678,91 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+# ==================== 會員等級管理 ====================
+
+class MemberTierRequest(BaseModel):
+    name: str
+    min_recharge: int
+    draw_discount: int = 0          # 抽卡折扣 % (0-100)
+    sort_order: int = 0
+    description: str = ""
+
+@app.get("/api/admin/member-tiers")
+def admin_list_tiers(admin: dict = Depends(require_admin)):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, name, min_recharge, draw_discount, sort_order, description FROM member_tiers ORDER BY sort_order, min_recharge"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.post("/api/admin/member-tiers")
+def admin_create_tier(req: MemberTierRequest, admin: dict = Depends(require_admin)):
+    if not req.name.strip():
+        raise HTTPException(400, "等級名稱不可為空")
+    if req.min_recharge < 0:
+        raise HTTPException(400, "門檻不可為負")
+    conn = get_db()
+    try:
+        if not (0 <= req.draw_discount <= 100):
+            conn.close()
+            raise HTTPException(400, "折扣必須介於 0-100")
+        conn.execute(
+            "INSERT INTO member_tiers (name, min_recharge, draw_discount, sort_order, description) VALUES (?, ?, ?, ?, ?)",
+            (req.name.strip(), req.min_recharge, req.draw_discount, req.sort_order, req.description or "")
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, f"新增失敗（名稱可能重複）: {e}")
+    conn.close()
+    return {"success": True}
+
+@app.put("/api/admin/member-tiers/{tier_id}")
+def admin_update_tier(tier_id: int, req: MemberTierRequest, admin: dict = Depends(require_admin)):
+    conn = get_db()
+    exists = conn.execute("SELECT id FROM member_tiers WHERE id = ?", (tier_id,)).fetchone()
+    if not exists:
+        conn.close()
+        raise HTTPException(404, "等級不存在")
+    if not (0 <= req.draw_discount <= 100):
+        conn.close()
+        raise HTTPException(400, "折扣必須介於 0-100")
+    conn.execute(
+        "UPDATE member_tiers SET name = ?, min_recharge = ?, draw_discount = ?, sort_order = ?, description = ? WHERE id = ?",
+        (req.name.strip(), req.min_recharge, req.draw_discount, req.sort_order, req.description or "", tier_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+@app.delete("/api/admin/member-tiers/{tier_id}")
+def admin_delete_tier(tier_id: int, admin: dict = Depends(require_admin)):
+    conn = get_db()
+    # 不允許刪除「普通會員」或 min_recharge=0 的最低等級
+    tier = conn.execute("SELECT * FROM member_tiers WHERE id = ?", (tier_id,)).fetchone()
+    if not tier:
+        conn.close()
+        raise HTTPException(404, "等級不存在")
+    if tier["min_recharge"] == 0:
+        conn.close()
+        raise HTTPException(400, "不可刪除最低等級")
+    conn.execute("DELETE FROM member_tiers WHERE id = ?", (tier_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+@app.post("/api/admin/member-tiers/recalculate-all")
+def admin_recalculate_all(admin: dict = Depends(require_admin)):
+    """重新計算所有會員的等級（依目前門檻）"""
+    conn = get_db()
+    users = conn.execute("SELECT id FROM users WHERE role = 'member'").fetchall()
+    count = 0
+    for u in users:
+        recalculate_member_level(conn, u["id"])
+        count += 1
+    conn.commit()
+    conn.close()
+    return {"success": True, "updated": count}

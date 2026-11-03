@@ -168,3 +168,37 @@ CREATE TABLE IF NOT EXISTS password_reset_codes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reset_codes_user ON password_reset_codes(user_id);
+
+-- ============================================================
+-- 會員等級系統（依累計儲值金額自動升級）
+-- ============================================================
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS member_level TEXT NOT NULL DEFAULT '普通會員';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS total_recharged INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS member_tiers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    min_recharge INTEGER NOT NULL DEFAULT 0,
+    draw_discount INTEGER NOT NULL DEFAULT 0,   -- 抽卡折扣 % (0-100)
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_member_tiers_min ON member_tiers(min_recharge);
+
+-- 預設等級（可於後台修改門檻與名稱）
+INSERT INTO member_tiers (name, min_recharge, draw_discount, sort_order, description) VALUES
+('普通會員', 0, 0, 0, '預設等級'),
+('VIP1', 1000, 2, 1, '累計儲值達 1,000，抽卡 98 折'),
+('VIP2', 5000, 4, 2, '累計儲值達 5,000，抽卡 96 折'),
+('VIP3', 15000, 6, 3, '累計儲值達 15,000，抽卡 94 折'),
+('VIP4', 40000, 8, 4, '累計儲值達 40,000，抽卡 92 折'),
+('VIP5', 80000, 10, 5, '累計儲值達 80,000，抽卡 9 折'),
+('VVIP', 200000, 15, 6, '累計儲值達 200,000，抽卡 85 折'),
+('SVIP', 500000, 20, 7, '累計儲值達 500,000，抽卡 8 折')
+ON CONFLICT (name) DO NOTHING;
+
+-- 若表已存在，補上折扣欄位
+ALTER TABLE member_tiers ADD COLUMN IF NOT EXISTS draw_discount INTEGER NOT NULL DEFAULT 0;
