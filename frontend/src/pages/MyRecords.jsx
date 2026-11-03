@@ -205,50 +205,8 @@ export default function MyRecords() {
             </div>
           </div>
         </div>
-      )}<div className="mt-5 flex justify-center divide-x divide-white/10">
-                <div className="px-5">
-                  <div className="text-[11px] text-gray-500">累計儲值</div>
-                  <div className="text-lg font-semibold text-amber-300 tabular-nums">{tierInfo.total_recharged?.toLocaleString() || 0}</div>
-                </div>
-                {tierInfo.draw_discount > 0 && (
-                  <div className="px-5">
-                    <div className="text-[11px] text-gray-500">抽卡優惠</div>
-                    <div className="text-lg font-semibold text-green-400">{100 - tierInfo.draw_discount} 折</div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {tierInfo.next_tier && (
-              <div className="relative mt-6">
-                <div className="flex justify-between text-xs text-gray-400 mb-2">
-                  <span>距離 {tierInfo.next_tier.name}</span>
-                  <span className="text-amber-300 font-medium">還差 {tierInfo.next_tier.remaining.toLocaleString()}</span>
-                </div>
-                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-all duration-700"
-                    style={{
-                      width: `${Math.min(100, ((tierInfo.total_recharged || 0) / tierInfo.next_tier.min_recharge) * 100)}%`
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-gray-600 mt-1">
-                  <span>{tierInfo.total_recharged?.toLocaleString() || 0}</span>
-                  <span>{tierInfo.next_tier.min_recharge.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-            {!tierInfo.next_tier && (
-              <div className="relative mt-5 text-center">
-                <span className="inline-flex items-center gap-1 text-sm text-green-400">
-                  <span>✦</span> 已達最高等級
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
       )}
+
       <h1 className="text-2xl font-bold text-pink-300 mb-6">我的功能</h1>
       <div className="flex flex-wrap gap-2 mb-6">
         <button onClick={() => setTab("draw")} className={`px-4 py-2 rounded-lg ${tab === "draw" ? "bg-pink-600" : "bg-dark-800"}`}>抽卡紀錄</button>
