@@ -119,7 +119,7 @@ export default function MyRecords() {
   return (
     <div>
       {tierInfo && (
-        <div className="mb-8 mx-auto max-w-lg">
+        <div className="mb-8 w-full">
           <div className="relative p-5 rounded-2xl bg-gradient-to-br from-dark-800/90 to-dark-900 border border-white/10 overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-pink-400/50 to-transparent" />
             <div className="flex items-center gap-4">
